@@ -16,11 +16,12 @@ It ships as an installable web app (PWA) on GitHub Pages:
 | Tab "Heute" | done |
 | Tab "Backlog" (queue, archive, add with clipboard and auto-fill) | done |
 | In-app reader (abstract, figures, conclusion, full text for arXiv) | done |
-| In-app feeds: new papers (PubMed, arXiv via OpenAlex), Bluesky, HF trending | next |
+| Feed tab: new papers (arXiv and PubMed via OpenAlex), Hugging Face trending, Bluesky | done |
 | Plain-language summaries (Gemini free tier, own key in settings) | done |
 | "Ask Claude": hands the paper to a claude.ai chat for follow-up questions | done |
 | English UI | done |
-| Tab "Themen und Personen" | open |
+| Topics tab: names, colours, feed keywords | done |
+| People you follow | open |
 | Tab "Einstellungen" (routine, reminder, quick links, JSON export/import) | open |
 
 ## Install on the iPhone

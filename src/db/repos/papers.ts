@@ -161,3 +161,8 @@ export async function deletePaper(db: Db, id: number) {
   await db.runAsync('DELETE FROM papers WHERE id = ?', id);
   notifyChange();
 }
+
+export async function findPaperByUrl(db: Db, url: string): Promise<Paper | null> {
+  const row = await db.getFirstAsync<Row>('SELECT * FROM papers WHERE url = ?', url);
+  return row ? fromRow(row) : null;
+}

@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -5,6 +6,7 @@ import { LinkButton } from '@/components/link-button';
 import { PaperCard } from '@/components/paper-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Button } from '@/components/ui';
 import { WeekDots } from '@/components/week-dots';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useQuery } from '@/data/use-query';
@@ -18,14 +20,24 @@ import type { QuickLink, TaskKind } from '@/db/types';
 import { parseKey, todayKey, weekdayOf } from '@/domain/dates';
 import { computeStreak, makeCountsRule } from '@/domain/streak';
 import { useTheme } from '@/hooks/use-theme';
+import type { FeedTab } from './feed';
 
-// Which quick links each task kind shows on the card.
+// The in-app feed each task kind opens, and the external quick links it still offers
+// for what the app cannot show (Scholar Inbox, X, alphaXiv).
+const KIND_FEED: Record<TaskKind, { tab: FeedTab; label: string } | null> = {
+  inbox: { tab: 'new', label: 'Open new papers' },
+  inbox_backlog: { tab: 'new', label: 'Open new papers' },
+  backlog: null,
+  social: { tab: 'bluesky', label: 'Open Bluesky feed' },
+  trending: { tab: 'trending', label: 'Open trending papers' },
+  custom: null,
+};
 const KIND_LINKS: Record<TaskKind, string[]> = {
   inbox: ['scholarInbox'],
   inbox_backlog: ['scholarInbox'],
   backlog: [],
-  social: ['bluesky', 'x'],
-  trending: ['alphaxiv', 'hfPapers'],
+  social: ['x'],
+  trending: ['alphaxiv'],
   custom: [],
 };
 
@@ -98,6 +110,15 @@ export default function TodayScreen() {
                 about {task.durationMin} min
               </ThemedText>
 
+              {task.kind && KIND_FEED[task.kind] ? (
+                <Button
+                  label={KIND_FEED[task.kind]!.label}
+                  variant="primary"
+                  onPress={() =>
+                    router.navigate({ pathname: '/feed', params: { tab: KIND_FEED[task.kind]!.tab } })
+                  }
+                />
+              ) : null}
               {links.map((l) => (
                 <LinkButton key={l.id} label={l.label} url={l.url} />
               ))}

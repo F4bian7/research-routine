@@ -20,6 +20,7 @@ export default function SettingsScreen() {
   const [key, setKey] = useState<string | null>(null);
   const [model, setModel] = useState<string | null>(null);
   const [status, setStatus] = useState('');
+  const [bsky, setBsky] = useState<string | null>(null);
 
   if (!settings) return <ThemedView style={styles.container} />;
   const keyValue = key ?? settings.geminiApiKey ?? '';
@@ -81,6 +82,26 @@ export default function SettingsScreen() {
               <Button label="Test key" variant="primary" onPress={test} />
             </Row>
             {status ? <ThemedText type="small">{status}</ThemedText> : null}
+          </ThemedView>
+
+          <ThemedView type="backgroundElement" style={styles.section}>
+            <ThemedText type="smallBold">Bluesky feed</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              Accounts (for example name.bsky.social, separated by commas) or the link to one
+              Bluesky list. Leave empty to see posts that link to arXiv and match your topic
+              keywords.
+            </ThemedText>
+            <Field
+              label="Accounts or list link"
+              value={bsky ?? settings.blueskySource}
+              onChangeText={setBsky}
+              onBlur={() => {
+                if (bsky !== null) setSetting(db, 'blueskySource', bsky.trim());
+              }}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder="https://bsky.app/profile/…/lists/…"
+            />
           </ThemedView>
 
           <ThemedText type="small" themeColor="textSecondary">

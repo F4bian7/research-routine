@@ -4,6 +4,7 @@ export type Topic = {
   id: number;
   name: string;
   color: string;
+  keywords: string; // comma-separated; words inside one keyword must all match
 };
 
 export type PersonLinks = {
@@ -72,6 +73,8 @@ export type Settings = {
   // Gemini API key for summaries. Stays on the device; never part of a JSON export.
   geminiApiKey: string | null;
   geminiModel: string;
+  // Bluesky accounts (handles) or one list URL; empty = search posts by topic keywords.
+  blueskySource: string;
 };
 
 export type Summary = {

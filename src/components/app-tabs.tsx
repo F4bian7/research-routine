@@ -20,6 +20,11 @@ export default function AppTabs() {
         />
       </NativeTabs.Trigger>
 
+      <NativeTabs.Trigger name="feed">
+        <NativeTabs.Trigger.Label>Feed</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="newspaper" md="rss_feed" />
+      </NativeTabs.Trigger>
+
       <NativeTabs.Trigger name="backlog">
         <NativeTabs.Trigger.Label>Backlog</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon

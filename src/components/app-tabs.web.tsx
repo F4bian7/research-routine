@@ -7,6 +7,7 @@ import { Colors } from '@/constants/theme';
 const ICONS = {
   today:
     'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z',
+  feed: 'M6.18 15.64a2.18 2.18 0 0 1 2.18 2.18C8.36 19 7.38 20 6.18 20 5 20 4 19 4 17.82a2.18 2.18 0 0 1 2.18-2.18M4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27V4.44m0 5.66a9.9 9.9 0 0 1 9.9 9.9h-2.83A7.07 7.07 0 0 0 4 12.93V10.1z',
   backlog:
     'M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9H9V9h10v2zm-4 4H9v-2h6v2zm4-8H9V5h10v2z',
   people:
@@ -27,6 +28,7 @@ function icon(path: string) {
 }
 
 const TodayIcon = icon(ICONS.today);
+const FeedIcon = icon(ICONS.feed);
 const BacklogIcon = icon(ICONS.backlog);
 const PeopleIcon = icon(ICONS.people);
 const SettingsIcon = icon(ICONS.settings);
@@ -44,6 +46,7 @@ export default function AppTabs() {
         tabBarStyle: { backgroundColor: colors.background, borderTopColor: colors.border },
       }}>
       <Tabs.Screen name="index" options={{ title: 'Today', tabBarIcon: TodayIcon }} />
+      <Tabs.Screen name="feed" options={{ title: 'Feed', tabBarIcon: FeedIcon }} />
       <Tabs.Screen
         name="backlog"
         options={{ title: 'Backlog', tabBarIcon: BacklogIcon }}

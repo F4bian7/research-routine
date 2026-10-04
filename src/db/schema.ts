@@ -81,6 +81,21 @@ const MIGRATIONS: string[] = [
   UPDATE settings SET value = replace(replace(value, 'Bluesky-Liste', 'Bluesky list'), 'X-Liste', 'X list')
     WHERE key = 'quickLinks';
   `,
+  // Feeds: search keywords per topic, and what the user did with feed items.
+  `
+  ALTER TABLE topics ADD COLUMN keywords TEXT NOT NULL DEFAULT '';
+  UPDATE topics SET keywords = 'medical image segmentation, nnU-Net, "segment anything"'
+    WHERE name = 'Medical image segmentation';
+  UPDATE topics SET keywords = 'EEG seizure, EEG epilepsy, "seizure detection", EEG deep learning'
+    WHERE name = 'EEG and seizure analysis';
+  UPDATE topics SET keywords = 'MRI reconstruction, accelerated MRI, quantitative MRI, "MR fingerprinting"'
+    WHERE name = 'MRI physics and reconstruction';
+  CREATE TABLE feed_seen (
+    id TEXT PRIMARY KEY,
+    decision TEXT NOT NULL,
+    at TEXT NOT NULL
+  );
+  `,
 ];
 
 export async function migrateAndSeed(db: Db) {

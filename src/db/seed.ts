@@ -5,9 +5,21 @@ import type { PaperType } from './types';
 
 // Seed rows are ordinary rows: editable and deletable like anything the user adds.
 const TOPICS = [
-  { name: 'Medical image segmentation', color: '#3B82F6' },
-  { name: 'EEG and seizure analysis', color: '#10B981' },
-  { name: 'MRI physics and reconstruction', color: '#F59E0B' },
+  {
+    name: 'Medical image segmentation',
+    color: '#3B82F6',
+    keywords: 'medical image segmentation, nnU-Net, "segment anything"',
+  },
+  {
+    name: 'EEG and seizure analysis',
+    color: '#10B981',
+    keywords: 'EEG seizure, EEG epilepsy, "seizure detection", EEG deep learning',
+  },
+  {
+    name: 'MRI physics and reconstruction',
+    color: '#F59E0B',
+    keywords: 'MRI reconstruction, accelerated MRI, quantitative MRI, "MR fingerprinting"',
+  },
 ];
 
 // topic is an index into TOPICS.
@@ -86,7 +98,12 @@ export async function seedIfEmpty(db: Db) {
   await db.withExclusiveTransactionAsync(async (tx) => {
     const topicIds: number[] = [];
     for (const t of TOPICS) {
-      const r = await tx.runAsync('INSERT INTO topics (name, color) VALUES (?, ?)', t.name, t.color);
+      const r = await tx.runAsync(
+        'INSERT INTO topics (name, color, keywords) VALUES (?, ?, ?)',
+        t.name,
+        t.color,
+        t.keywords
+      );
       topicIds.push(r.lastInsertRowId);
     }
 
