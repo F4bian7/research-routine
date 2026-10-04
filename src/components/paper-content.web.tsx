@@ -1,6 +1,7 @@
 import { type MouseEvent, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { SummarySection } from '@/components/summary-section';
 import { ThemedText } from '@/components/themed-text';
 import { Chip, Row } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
@@ -18,6 +19,7 @@ type Parsed = {
   figures: string[];
   conclusion: string;
   full: string;
+  plain: string; // text for the summary, without the bibliography
 };
 
 const DROP = 'script, style, link, meta, iframe, object, embed, form, input, button, noscript, nav';
@@ -78,7 +80,11 @@ function parseArxiv(html: string, base: string): Parsed | null {
     sections.filter((s) => /summary|discussion|outlook/i.test(heading(s))).pop();
   const conclusion = conclusionEl?.outerHTML ?? '';
 
-  return { abstract, figures, conclusion, full: article.innerHTML };
+  const textCopy = article.cloneNode(true) as Element;
+  textCopy.querySelectorAll('.ltx_bibliography, figure, table').forEach((e) => e.remove());
+  const plain = (textCopy.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+  return { abstract, figures, conclusion, full: article.innerHTML, plain };
 }
 
 function css(text: string, secondary: string, accent: string, border: string) {
@@ -179,6 +185,7 @@ export function PaperContent({ paper }: { paper: Paper }) {
         <Html html={parsed.full} />
       ) : (
         <>
+          <SummarySection paper={paper} text={parsed?.plain || abstract} />
           <ThemedText type="smallBold" style={styles.heading}>
             Abstract
           </ThemedText>

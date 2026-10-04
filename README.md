@@ -17,7 +17,7 @@ It ships as an installable web app (PWA) on GitHub Pages:
 | Tab "Backlog" (queue, archive, add with clipboard and auto-fill) | done |
 | In-app reader (abstract, figures, conclusion, full text for arXiv) | done |
 | In-app feeds: new papers (PubMed, arXiv via OpenAlex), Bluesky, HF trending | next |
-| Plain-language summaries (Claude API, own key) | open |
+| Plain-language summaries (Gemini free tier, own key in settings) | done |
 | Tab "Themen und Personen" | open |
 | Tab "Einstellungen" (routine, reminder, quick links, JSON export/import) | open |
 

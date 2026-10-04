@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { SummarySection } from '@/components/summary-section';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import type { Paper } from '@/db/types';
@@ -19,6 +20,7 @@ export function PaperContent({ paper }: { paper: Paper }) {
 
   return (
     <View style={styles.box}>
+      {abstract ? <SummarySection paper={paper} text={abstract} /> : null}
       <ThemedText type="smallBold">Abstract</ThemedText>
       <ThemedText>{abstract === null ? 'Lädt …' : abstract || 'Kein Abstract gefunden.'}</ThemedText>
     </View>

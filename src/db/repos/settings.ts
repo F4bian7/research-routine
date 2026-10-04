@@ -1,6 +1,5 @@
-import type { Db } from '@/db/db';
-
 import { notifyChange } from '@/data/changes';
+import type { Db } from '@/db/db';
 import { DEFAULT_SETTINGS } from '../defaults';
 import type { Settings } from '../types';
 
@@ -13,6 +12,8 @@ export async function getSettings(db: Db): Promise<Settings> {
     reminderTime: stored.reminderTime ?? DEFAULT_SETTINGS.reminderTime,
     weekendCounts: stored.weekendCounts ?? DEFAULT_SETTINGS.weekendCounts,
     quickLinks: stored.quickLinks ?? DEFAULT_SETTINGS.quickLinks,
+    geminiApiKey: stored.geminiApiKey ?? DEFAULT_SETTINGS.geminiApiKey,
+    geminiModel: stored.geminiModel || DEFAULT_SETTINGS.geminiModel,
   };
 }
 

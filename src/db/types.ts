@@ -69,4 +69,17 @@ export type Settings = {
   reminderTime: string | null; // HH:MM, null = off
   weekendCounts: boolean;
   quickLinks: QuickLink[];
+  // Gemini API key for summaries. Stays on the device; never part of a JSON export.
+  geminiApiKey: string | null;
+  geminiModel: string;
+};
+
+export type Summary = {
+  short: string;
+  problem: string;
+  method: string;
+  result: string;
+  relevance: string;
+  limits: string;
+  terms: { term: string; explanation: string }[];
 };
