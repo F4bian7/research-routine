@@ -44,7 +44,11 @@ export type Gemini = {
 type GenerateResponse = {
   candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] }; finishReason?: string }[];
   promptFeedback?: { blockReason?: string };
-  error?: { message?: string; status?: string };
+  error?: {
+    message?: string;
+    status?: string;
+    details?: { quotaId?: string; violations?: { quotaId?: string }[]; retryDelay?: string }[];
+  };
 };
 
 function parseSummary(text: string): Summary {
@@ -74,19 +78,50 @@ export function extractJson(text: string): string {
   return start >= 0 && end > start ? t.slice(start, end + 1) : t;
 }
 
-async function callModel(apiKey: string, model: string, body: unknown): Promise<string> {
+type GenerateBody = {
+  systemInstruction?: { parts: { text: string }[] };
+  contents: { role: string; parts: { text: string }[] }[];
+  generationConfig: { responseMimeType?: string; temperature: number };
+};
+
+// Gemma models take neither a system instruction nor JSON mode; fold both into the prompt.
+function forModel(model: string, body: GenerateBody): GenerateBody {
+  if (!model.startsWith('gemma')) return body;
+  const instruction = body.systemInstruction?.parts[0]?.text ?? '';
+  const input = body.contents[0].parts[0].text;
+  return {
+    contents: [{ role: 'user', parts: [{ text: `${instruction}\n\n---\n\n${input}` }] }],
+    generationConfig: { temperature: body.generationConfig.temperature },
+  };
+}
+
+async function callModel(apiKey: string, model: string, body: GenerateBody): Promise<string> {
   let res: Response;
   try {
     res = await fetch(`${ENDPOINT}/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-      body: JSON.stringify(body),
+      body: JSON.stringify(forModel(model, body)),
     });
   } catch {
     throw new GeminiError('Could not reach Gemini. Are you online?');
   }
   const data = (await res.json().catch(() => ({}))) as GenerateResponse;
-  if (!res.ok) throw new GeminiError(data.error?.message ?? `HTTP ${res.status}`, res.status);
+  if (!res.ok) {
+    // Quota ids say whether a per-minute or a per-day limit was hit.
+    const details = data.error?.details ?? [];
+    const quotaIds = details
+      .flatMap((d) => [d.quotaId, ...(d.violations ?? []).map((v) => v.quotaId)])
+      .filter(Boolean)
+      .join(' ');
+    const retry = details.map((d) => d.retryDelay).find(Boolean);
+    throw new GeminiError(
+      [data.error?.message ?? `HTTP ${res.status}`, quotaIds, retry ? `(retry in ${retry})` : '']
+        .filter(Boolean)
+        .join(' '),
+      res.status
+    );
+  }
   const candidate = data.candidates?.[0];
   // Thinking models may send their thoughts as extra parts; only the answer counts.
   const text = (candidate?.content?.parts ?? [])
@@ -118,15 +153,39 @@ export async function listModels(apiKey: string): Promise<string[]> {
     });
 }
 
+// Gemma: open models with a very large free daily quota but small per-minute limits,
+// the last resort for many small requests. The exact name is looked up once.
+export const GEMMA_AUTO = 'gemma:auto';
+let gemmaName: Promise<string | null> | null = null;
+
+async function gemmaModel(apiKey: string): Promise<string | null> {
+  gemmaName ??= fetch(`${ENDPOINT}?pageSize=200`, { headers: { 'x-goog-api-key': apiKey } })
+    .then((r) => (r.ok ? r.json() : { models: [] }))
+    .then((d: { models?: { name: string; supportedGenerationMethods?: string[] }[] }) => {
+      const size = (n: string) => Number(n.match(/(\d+)b/)?.[1] ?? 0);
+      const names = (d.models ?? [])
+        .filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
+        .map((m) => m.name.replace(/^models\//, ''))
+        .filter((n) => /^gemma-4/.test(n))
+        .sort((a, b) => size(b) - size(a));
+      return names[0] ?? null;
+    })
+    .catch(() => null);
+  return gemmaName;
+}
+
 // Why a model failed, and what that means for trying another one.
 //  - 'gone': unknown model or never any free quota; switch for good.
 //  - 'today': quota used up (per day or per minute); another model has its own quota.
-function failureKind(e: unknown): 'gone' | 'today' | null {
+function failureKind(e: unknown): 'gone' | 'today' | 'minute' | null {
   if (!(e instanceof GeminiError)) return null;
   if (e.status === 404) return 'gone';
-  if (e.status === 400 && /not (supported|found)|unsupported/i.test(e.message)) return 'gone';
-  if (e.status === 429) return /limit: ?0\b/.test(e.message) ? 'gone' : 'today';
-  if (e.status === 503) return 'today'; // overloaded
+  if (e.status === 400 && /not (supported|found)|unsupported|not enabled/i.test(e.message)) return 'gone';
+  if (e.status === 429) {
+    if (/limit: ?0\b/.test(e.message)) return 'gone';
+    return /PerDay|per day/i.test(e.message) ? 'today' : 'minute';
+  }
+  if (e.status === 503 || e.status === 500) return 'minute'; // overloaded for now
   return null;
 }
 
@@ -156,12 +215,14 @@ export async function generateJson<T>(
   parse: (text: string) => T,
   temperature = 0.3
 ): Promise<T> {
-  const body = {
+  const body: GenerateBody = {
     systemInstruction: { parts: [{ text: instruction }] },
     contents: [{ role: 'user', parts: [{ text: input.slice(0, MAX_CHARS) }] }],
     generationConfig: { responseMimeType: 'application/json', temperature },
   };
-  const run = async (model: string) => {
+  const run = async (wanted: string) => {
+    const model = wanted === GEMMA_AUTO ? await gemmaModel(gemini.apiKey) : wanted;
+    if (!model) throw new GeminiError('No Gemma model available.', 404);
     const text = await callModel(gemini.apiKey, model, body);
     usageListeners.forEach((l) => l(model));
     try {
@@ -192,6 +253,7 @@ export async function generateJson<T>(
       if (!kind) throw e;
       firstError ??= e;
       if (kind === 'today') exhausted.set(model, Date.now() + EXHAUSTED_FOR_MS);
+      if (kind === 'minute') exhausted.set(model, Date.now() + 60_000);
       if (kind === 'gone' && model === gemini.model) chosenGone = true;
       if (!queue.length && !listed) {
         listed = true;

@@ -12,7 +12,7 @@ import {
 import { getSettings, setSetting } from '@/db/repos/settings';
 import { listTopics } from '@/db/repos/topics';
 import type { Card, Lesson, Topic } from '@/db/types';
-import type { Gemini } from '@/sources/gemini';
+import { type Gemini, GEMMA_AUTO } from '@/sources/gemini';
 import { makeLesson, makeSyllabus } from '@/sources/learning';
 
 export const MAX_REVIEWS = 15;
@@ -20,21 +20,32 @@ export const MAX_NEW_CARDS = 5;
 
 export const XP = { lesson: 10, quizRight: 5, card: 2 };
 
-// Two models: a strong one for the few requests where quality counts most (lessons,
-// course plans, paper summaries) and a fast one with a much larger free daily quota for
-// the many small ones (ratings, explanations, flashcards). Each is the other's fallback.
+// Free-tier limits (AI Studio, 2026-10): every Flash model has its own 20 requests a
+// day, the Flash-Lite models 500, Gemma 4 about 14,400 (but only 16K tokens a minute).
+// Quality work (lessons, course plans, summaries) walks through the Flash models, then
+// Flash-Lite; the many small requests (ratings, explanations, cards) use Flash-Lite and
+// fall back to Gemma. A model out of quota is skipped until it has quota again.
+const QUALITY_POOL = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash'];
+const FAST_POOL = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
+
 export type GeminiUse = 'quality' | 'fast';
+
+// Older settings hold the alias, which points at the newest Flash.
+const resolveAlias = (m: string) => (m === 'gemini-flash-latest' ? QUALITY_POOL[0] : m);
 
 export async function getGemini(db: Db, use: GeminiUse = 'quality'): Promise<Gemini | null> {
   const s = await getSettings(db);
   if (!s.geminiApiKey) return null;
   const key = use === 'quality' ? 'geminiModel' : 'geminiFastModel';
-  const [model, other] =
-    use === 'quality' ? [s.geminiModel, s.geminiFastModel] : [s.geminiFastModel, s.geminiModel];
+  const model = resolveAlias(use === 'quality' ? s.geminiModel : s.geminiFastModel);
+  const chain =
+    use === 'quality'
+      ? [...QUALITY_POOL, resolveAlias(s.geminiFastModel), ...FAST_POOL, GEMMA_AUTO]
+      : [...FAST_POOL, GEMMA_AUTO];
   return {
     apiKey: s.geminiApiKey,
     model,
-    fallbacks: [other],
+    fallbacks: chain.filter((m, i) => m !== model && chain.indexOf(m) === i),
     onModel: (m) => void setSetting(db, key, m),
   };
 }

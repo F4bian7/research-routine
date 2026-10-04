@@ -119,3 +119,48 @@ test('a model out of daily quota hands over to its fallback without being replac
     globalThis.fetch = real;
   }
 });
+
+test('Gemma is found by name and gets the instruction inside the prompt', async () => {
+  const { generateJson, GEMMA_AUTO } = await import('./gemini');
+  const real = globalThis.fetch;
+  const bodies: Record<string, unknown> = {};
+  globalThis.fetch = (async (url: string, o?: RequestInit) => {
+    const u = String(url);
+    if (u.includes('?pageSize')) {
+      return new Response(
+        JSON.stringify({
+          models: [
+            { name: 'models/gemma-4-26b-it', supportedGenerationMethods: ['generateContent'] },
+            { name: 'models/gemma-4-31b-it', supportedGenerationMethods: ['generateContent'] },
+          ],
+        })
+      );
+    }
+    const model = decodeURIComponent(u.split('/models/')[1].split(':')[0]);
+    bodies[model] = JSON.parse(String(o!.body));
+    if (model === 'lite') {
+      return new Response(
+        JSON.stringify({ error: { message: 'Quota exceeded', details: [{ quotaId: 'GenerateRequestsPerDayPerProjectPerModel-FreeTier' }] } }),
+        { status: 429 }
+      );
+    }
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'Sure:\n{"ok": true}' }] } }] }));
+  }) as typeof fetch;
+  try {
+    let used = '';
+    const out = await generateJson(
+      { apiKey: 'k', model: 'lite', fallbacks: [GEMMA_AUTO], onUsed: (m) => (used = m) },
+      'Rules here',
+      'Input here',
+      (t) => JSON.parse(t)
+    );
+    assert.deepEqual(out, { ok: true });
+    const gemma = bodies['gemma-4-31b-it'] as { systemInstruction?: unknown; contents: { parts: { text: string }[] }[]; generationConfig: Record<string, unknown> };
+    assert.equal(gemma.systemInstruction, undefined);
+    assert.equal(gemma.generationConfig.responseMimeType, undefined);
+    assert.match(gemma.contents[0].parts[0].text, /Rules here[\s\S]*Input here/);
+    assert.equal(used, GEMMA_AUTO);
+  } finally {
+    globalThis.fetch = real;
+  }
+});

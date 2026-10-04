@@ -11,8 +11,8 @@ export const DEFAULT_SETTINGS: Settings = {
   weekendCounts: false,
   quickLinks: DEFAULT_QUICK_LINKS,
   geminiApiKey: null,
-  // Alias that follows the newest Flash release, so the app does not pin a retired model.
-  geminiModel: 'gemini-flash-latest',
+  // The strongest model with a free tier; others take over when its 20 a day are used.
+  geminiModel: 'gemini-3.8-flash',
   geminiFastModel: 'gemini-3.5-flash-lite',
   geminiUsage: { date: '', counts: {} },
   blueskySource: '',

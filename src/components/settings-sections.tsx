@@ -310,10 +310,11 @@ export function GeminiSection({ settings }: { settings: Settings }) {
         placeholder="AIza…"
       />
       <Hint>
-        Two models share the work. The quality model writes lessons, course plans and paper
-        summaries, a few requests a day. The fast model rates and explains feed items and
-        drafts flashcards, which can be many; Flash-Lite models have a much larger free daily
-        limit. If one has no quota left, the other steps in.
+        On the free tier every Flash model has 20 requests a day, Flash-Lite 500, Gemma 4
+        about 14,400. The quality model writes lessons, course plans and paper summaries; when
+        its 20 are used, the other Flash models take over (about 80 a day together), then
+        Flash-Lite. The fast model rates and explains feed items and drafts flashcards; after
+        Flash-Lite comes Gemma. You do not need to change anything here.
       </Hint>
       <Field label="Quality model" value={model} onChangeText={setModel} onBlur={save} autoCapitalize="none" autoCorrect={false} />
       <Field label="Fast model" value={fast} onChangeText={setFast} onBlur={save} autoCapitalize="none" autoCorrect={false} />

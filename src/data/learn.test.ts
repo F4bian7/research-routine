@@ -45,3 +45,25 @@ test('a session: due and new cards, lesson cards join, completion counts for the
   assert.deepEqual((await listCompletions(db)).map((c) => c.date), ['2026-10-05']);
   assert.equal((await getLearnDay(db, '2026-10-05'))?.xp, 14);
 });
+
+test('quality work walks through the Flash models before Flash-Lite and Gemma', async () => {
+  const { getGemini } = await import('./learn');
+  const { setSetting } = await import('../db/repos/settings');
+  const db = await freshDb();
+  assert.equal(await getGemini(db), null);
+  await setSetting(db, 'geminiApiKey', 'k');
+  await setSetting(db, 'geminiModel', 'gemini-flash-latest'); // old alias in old settings
+  const q = (await getGemini(db, 'quality'))!;
+  assert.equal(q.model, 'gemini-3.8-flash');
+  assert.deepEqual(q.fallbacks, [
+    'gemini-3.7-flash',
+    'gemini-3.6-flash',
+    'gemini-3.5-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-3.1-flash-lite',
+    'gemma:auto',
+  ]);
+  const f = (await getGemini(db, 'fast'))!;
+  assert.equal(f.model, 'gemini-3.5-flash-lite');
+  assert.deepEqual(f.fallbacks, ['gemini-3.1-flash-lite', 'gemma:auto']);
+});
