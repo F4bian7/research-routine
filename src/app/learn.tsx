@@ -9,7 +9,16 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { completeSession, exploreFrom, finishLesson, getGemini, peekLesson, prepareLesson, XP } from '@/data/learn';
+import {
+  completeSession,
+  exploreFrom,
+  finishLesson,
+  getGemini,
+  markPaperRead,
+  peekLesson,
+  prepareLesson,
+  XP,
+} from '@/data/learn';
 import { useDb } from '@/db/db';
 import { addNote } from '@/db/repos/notes';
 import { getLesson, listExplorations } from '@/db/repos/lessons';
@@ -105,6 +114,8 @@ export default function LearnScreen() {
   async function finish() {
     const root = blocks[0];
     await finishLesson(db, root);
+    // A paper explained is a paper read: it goes to the library's archive.
+    if (root.kind === 'paper' && root.paperUrl) await markPaperRead(db, root);
     const gained = xp + (root.status === 'done' && params.lesson ? 0 : XP.lesson);
     await completeSession(db, today, { xp: gained, reviewed: 0, lessonId: root.id });
     setXp(gained);
@@ -150,7 +161,9 @@ export default function LearnScreen() {
           }}>
           {phase === 'loading' && (
             <ThemedText themeColor="textSecondary">
-              {params.lesson ? 'Opening the lesson …' : 'Gemini is preparing your next lesson …'}
+              {params.lesson
+                ? 'Opening …'
+                : 'Gemini is preparing the next paper. The very first time it also chooses your reading path, which takes up to a minute.'}
             </ThemedText>
           )}
 
@@ -204,7 +217,7 @@ export default function LearnScreen() {
                 +{xp} XP · {blocks.length - 1} {blocks.length - 1 === 1 ? 'exploration' : 'explorations'} · {total} XP in total
               </ThemedText>
               <Button
-                label={next ? `Next lesson: ${next}` : 'Start another session'}
+                label={next ? `Next paper: ${next}` : 'Start another session'}
                 variant="primary"
                 onPress={() => router.replace({ pathname: '/learn', params: { n: String(Date.now()) } })}
               />

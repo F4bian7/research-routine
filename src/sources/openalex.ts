@@ -14,6 +14,7 @@ export type PaperMeta = {
 };
 
 type Work = {
+  cited_by_count?: number;
   id?: string;
   doi?: string | null;
   publication_date?: string;
@@ -62,7 +63,8 @@ export async function fetchOpenAlex(ref: PaperRef): Promise<PaperMeta | null> {
 }
 
 const ARXIV_SOURCE = 'S4306400194';
-const SELECT = 'id,doi,title,publication_year,publication_date,authorships,abstract_inverted_index,primary_location';
+const SELECT =
+  'id,doi,title,publication_year,publication_date,authorships,abstract_inverted_index,primary_location,cited_by_count';
 
 export function workToFeedPaper(w: Work, topicId: number | null): FeedPaper {
   const doi = (w.doi ?? '').replace(/^https:\/\/doi\.org\//i, '');
@@ -79,6 +81,7 @@ export function workToFeedPaper(w: Work, topicId: number | null): FeedPaper {
     topicId,
     authorIds: (w.authorships ?? []).map((a) => shortId(a.author.id ?? '')).filter(Boolean),
     authorOrcids: (w.authorships ?? []).map((a) => a.author.orcid ?? '').filter(Boolean),
+    citations: w.cited_by_count,
   };
 }
 
@@ -216,4 +219,36 @@ export async function topRecentPapers(fromDate: string, fresh = false): Promise<
     `&sort=cited_by_count:desc&per_page=25&select=${SELECT}`;
   const data = await oaGet<{ results?: Work[] }>(url, { cacheDay: true, fresh });
   return (data.results ?? []).map((w) => workToFeedPaper(w, null)).filter((p) => p.title);
+}
+
+// The most cited works matching a query (title and abstract), optionally only recent
+// ones: candidates for a reading path from the foundations to today.
+export async function mostCited(query: string, fromDate?: string, perPage = 25): Promise<FeedPaper[]> {
+  const filter = [
+    `title_and_abstract.search:${encodeURIComponent(query.replace(/,/g, ' '))}`,
+    'type:article|preprint|review',
+    fromDate ? `from_publication_date:${fromDate}` : '',
+  ]
+    .filter(Boolean)
+    .join(',');
+  const url =
+    `https://api.openalex.org/works?filter=${filter}&sort=cited_by_count:desc` +
+    `&per_page=${perPage}&select=${SELECT}`;
+  const data = await oaGet<{ results?: Work[] }>(url, { cacheDay: true });
+  return (data.results ?? []).map((w) => workToFeedPaper(w, null)).filter((p) => p.title);
+}
+
+// One paper by its title, for checking a paper the model says is missing.
+export async function findByTitle(title: string): Promise<FeedPaper | null> {
+  const url =
+    `https://api.openalex.org/works?search=${encodeURIComponent(title)}` +
+    `&sort=relevance_score:desc&per_page=3&select=${SELECT}`;
+  const data = await oaGet<{ results?: Work[] }>(url, { cacheDay: true });
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const want = norm(title);
+  const hit = (data.results ?? []).find((w) => {
+    const got = norm(w.title ?? '');
+    return got === want || (got.length > 20 && (got.startsWith(want) || want.startsWith(got)));
+  });
+  return hit ? workToFeedPaper(hit, null) : null;
 }

@@ -19,21 +19,19 @@ test('the thesis pack is well formed', () => {
 test('importing a pack adds topic, course, papers first, people, focus; twice changes nothing', async () => {
   const { importPack } = await import('./packs');
   const { listQueued } = await import('../db/repos/papers');
-  const { listLessons } = await import('../db/repos/lessons');
   const { listPeople } = await import('../db/repos/people');
   const { getSettings } = await import('../db/repos/settings');
   const { peekLesson } = await import('./learn');
 
   const db = await freshDb();
   const r = await importPack(db, pack);
-  assert.equal(r.lessons, pack.lessons.length);
+  assert.equal(r.lessons, 0); // sessions follow a reading path planned later
   assert.equal(r.papers, pack.papers.length);
   assert.equal(r.people, 3);
 
   const queue = await listQueued(db);
   assert.equal(queue[0].title, pack.papers[0].title); // pack papers come first, in order
   assert.equal(queue[1].title, pack.papers[1].title);
-  assert.equal((await listLessons(db, r.topicId!))[0].title, pack.lessons[0].title);
   assert.equal((await getSettings(db)).focusTopicId, r.topicId);
   // The focused course provides the next lesson (as soon as Gemini can write it).
   assert.equal((await peekLesson(db, true)).topic?.id, r.topicId);

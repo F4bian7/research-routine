@@ -10,21 +10,21 @@ import { getGemini } from '@/data/learn';
 import { useQuery } from '@/data/use-query';
 import { type Db, useDb } from '@/db/db';
 import { cardCounts, deleteCard, listCards, updateCard } from '@/db/repos/cards';
-import { addSyllabus, countExplorations, deleteSyllabus, listLessons } from '@/db/repos/lessons';
+import { countExplorations, deletePlannedPath, listPath } from '@/db/repos/lessons';
+import { extendPath, planPath } from '@/data/paths';
 import { getSettings } from '@/db/repos/settings';
 import type { Card, Lesson, Topic } from '@/db/types';
 import { todayKey } from '@/domain/dates';
 import { intervalLabel } from '@/domain/srs';
 import { useTheme } from '@/hooks/use-theme';
 import { explainError } from '@/sources/gemini';
-import { makeSyllabus } from '@/sources/learning';
 
 async function load(db: Db) {
   const [counts, suggested, active, lessons, settings, explored] = await Promise.all([
     cardCounts(db, todayKey()),
     listCards(db, 'suggested'),
     listCards(db, 'active'),
-    listLessons(db),
+    listPath(db),
     getSettings(db),
     countExplorations(db),
   ]);
@@ -50,8 +50,9 @@ function SuggestedCard({ card }: { card: Card }) {
   );
 }
 
-// One topic's course: plan it, see the lessons, reread finished ones.
-function CourseCard({
+// One topic's reading path: plan it, follow it from the foundations to today, reread
+// finished papers, and add important new work later.
+function PathCard({
   topic,
   lessons,
   hasKey,
@@ -64,15 +65,14 @@ function CourseCard({
 }) {
   const db = useDb();
   const theme = useTheme();
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<'' | 'plan' | 'extend'>('');
   const [seconds, setSeconds] = useState(0);
   const [status, setStatus] = useState('');
-  const [justPlanned, setJustPlanned] = useState(false);
   const [open, setOpen] = useState(false);
   const done = lessons.filter((l) => l.status === 'done');
   const next = lessons.find((l) => l.status === 'planned');
 
-  // Planning takes a few seconds up to half a minute; show that it is working.
+  // Planning takes up to a minute; show that it is working.
   useEffect(() => {
     if (!busy) return;
     const start = Date.now();
@@ -80,23 +80,30 @@ function CourseCard({
     return () => clearInterval(timer);
   }, [busy]);
 
-  async function plan() {
+  async function run(kind: 'plan' | 'extend') {
     const g = await getGemini(db);
     if (!g) return setStatus('Add the free Gemini key in Settings first.');
     setSeconds(0);
-    setBusy(true);
+    setBusy(kind);
     setStatus('');
     try {
-      await addSyllabus(db, topic.id, await makeSyllabus(g, topic));
-      setJustPlanned(true);
+      const n = kind === 'plan' ? await planPath(db, g, topic) : await extendPath(db, g, topic);
+      setStatus(
+        kind === 'plan'
+          ? `Reading path planned: ${n} papers, from the foundations to today.`
+          : n
+            ? `${n} important new ${n === 1 ? 'paper' : 'papers'} added at the end.`
+            : 'Nothing new that clearly matters.'
+      );
       setOpen(true);
     } catch (e) {
-      setStatus(explainError(e));
+      setStatus(e instanceof Error && !('status' in e) ? e.message : explainError(e));
     } finally {
-      setBusy(false);
+      setBusy('');
     }
   }
 
+  let lastEra = '';
   return (
     <View style={[styles.card, { borderColor: theme.border }]}>
       <Pressable onPress={() => lessons.length > 0 && setOpen(!open)} style={styles.topRow}>
@@ -113,65 +120,84 @@ function CourseCard({
         hasKey ? (
           <>
             <Button
-              label={busy ? `Gemini is planning the course … ${seconds} s` : 'Plan the course now'}
+              label={busy ? `Choosing the papers … ${seconds} s` : 'Plan the reading path now'}
               variant="primary"
-              disabled={busy}
-              onPress={plan}
+              disabled={!!busy}
+              onPress={() => run('plan')}
             />
-            {busy && (
-              <ThemedText type="small" themeColor="textSecondary">
-                This takes up to half a minute. You can stay here.
-              </ThemedText>
-            )}
+            <ThemedText type="small" themeColor="textSecondary">
+              {busy
+                ? 'Searching the most cited papers and letting Gemini pick the ones that matter. Up to a minute.'
+                : 'Otherwise it is planned at your first session on this topic.'}
+            </ThemedText>
           </>
         ) : (
           <ThemedText type="small" themeColor="textSecondary">
-            Courses are written by Gemini. Add the free key in Settings.
+            Reading paths are chosen with Gemini. Add the free key in Settings.
           </ThemedText>
         )
       ) : (
         <>
-          {justPlanned && (
-            <ThemedText type="small" style={{ color: theme.success }}>
-              Course planned: {lessons.length} lessons. The first one is part of your next session.
-            </ThemedText>
-          )}
           {next ? (
             <ThemedText type="small" themeColor="textSecondary">
               Next: {next.title}
+              {next.paperMeta.year ? ` (${next.paperMeta.year})` : ''}
             </ThemedText>
           ) : (
-            <ThemedText type="small">Course finished.</ThemedText>
+            <ThemedText type="small">Path finished. Look for new important papers below.</ThemedText>
           )}
-          {justPlanned && <Button label="Start the first lesson now" onPress={() => router.push('/learn')} />}
           {open &&
-            lessons.map((l) =>
-              l.status === 'done' ? (
-                <Pressable
-                  key={l.id}
-                  onPress={() => router.push({ pathname: '/lesson/[id]', params: { id: String(l.id) } })}
-                  hitSlop={4}>
-                  <ThemedText type="small" style={{ color: theme.accent }}>
-                    ✓ {l.position}. {l.title}
-                    {explored.get(l.id) ? `  · ${explored.get(l.id)} explored` : ''}
-                  </ThemedText>
-                </Pressable>
-              ) : (
-                <ThemedText key={l.id} type="small" themeColor="textSecondary">
-                  {l.position}. {l.title}
-                </ThemedText>
-              )
-            )}
+            lessons.map((l) => {
+              const era = l.paperMeta.era ?? '';
+              const header = era && era !== lastEra ? era : '';
+              lastEra = era || lastEra;
+              const label = `${l.position}. ${l.title}${l.paperMeta.year ? ` (${l.paperMeta.year})` : ''}`;
+              return (
+                <View key={l.id} style={styles.pathRow}>
+                  {header ? (
+                    <ThemedText type="smallBold" style={styles.era}>
+                      {header}
+                    </ThemedText>
+                  ) : null}
+                  {l.status === 'done' ? (
+                    <Pressable
+                      onPress={() => router.push({ pathname: '/lesson/[id]', params: { id: String(l.id) } })}
+                      hitSlop={4}>
+                      <ThemedText type="small" style={{ color: theme.accent }}>
+                        ✓ {label}
+                        {explored.get(l.id) ? `  · ${explored.get(l.id)} explored` : ''}
+                      </ThemedText>
+                    </Pressable>
+                  ) : (
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {label}
+                    </ThemedText>
+                  )}
+                </View>
+              );
+            })}
+          {open && hasKey && (
+            <Button
+              label={busy === 'extend' ? `Looking … ${seconds} s` : 'Look for new important papers'}
+              variant="ghost"
+              disabled={!!busy}
+              onPress={() => run('extend')}
+            />
+          )}
           {open && done.length === 0 && (
-            <Pressable onPress={() => deleteSyllabus(db, topic.id)} hitSlop={4}>
+            <Pressable onPress={() => deletePlannedPath(db, topic.id)} hitSlop={4}>
               <ThemedText type="small" themeColor="textSecondary" style={styles.underline}>
-                Plan this course again
+                Plan this path again
               </ThemedText>
             </Pressable>
           )}
         </>
       )}
-      {status ? <ThemedText type="small" style={{ color: '#D93F3F' }}>{status}</ThemedText> : null}
+      {status ? (
+        <ThemedText type="small" style={{ color: status.startsWith('Reading path') || status.includes('added') ? theme.success : theme.text }}>
+          {status}
+        </ThemedText>
+      ) : null}
     </View>
   );
 }
@@ -218,16 +244,17 @@ export function CardsView({ topics }: { topics: Topic[] }) {
         </>
       )}
 
-      <ThemedText type="smallBold">Courses</ThemedText>
+      <ThemedText type="smallBold">Reading paths</ThemedText>
       <ThemedText type="small" themeColor="textSecondary">
-        Each topic gets a course of short lessons, from the basics to current research. One
-        lesson comes in every daily session;{' '}
+        Each topic gets a path through its literature: the foundational papers everyone must
+        know first, then the milestones, then today&apos;s state of the art. Every session explains
+        the next paper;{' '}
         {focus
-          ? `right now all of them come from "${focus.name}" (switch the focus in Topics).`
+          ? `right now they all come from "${focus.name}" (switch the focus in Topics).`
           : 'topics take turns.'}
       </ThemedText>
       {topics.map((t) => (
-        <CourseCard
+        <PathCard
           key={t.id}
           topic={t}
           lessons={lessons.filter((l) => l.topicId === t.id)}
@@ -270,6 +297,8 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   bold: { fontWeight: 700 },
   underline: { textDecorationLine: 'underline' },
+  pathRow: { gap: 2 },
+  era: { marginTop: Spacing.two, fontSize: 12, letterSpacing: 0.8, textTransform: 'uppercase' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

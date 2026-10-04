@@ -10,6 +10,7 @@ export type FeedPaper = {
   venue: string;
   topicId: number | null;
   upvotes?: number;
+  citations?: number; // OpenAlex cited_by_count
   authorIds?: string[]; // OpenAlex author ids, for the people timeline
   authorOrcids?: string[];
 };

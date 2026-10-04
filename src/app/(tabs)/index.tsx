@@ -105,9 +105,9 @@ export default function TodayScreen() {
   });
   const reviews = Math.min(counts.due, MAX_REVIEWS) + Math.min(counts.fresh, MAX_NEW_CARDS);
   const lessonLine = data.nextLesson
-    ? `Next: ${data.nextLesson.title}`
+    ? `Next paper: ${data.nextLesson.title}${data.nextLesson.paperMeta.year ? ` (${data.nextLesson.paperMeta.year})` : ''}`
     : data.hasKey && data.hasTopics
-      ? 'The next lesson of your course'
+      ? 'The first paper of your reading path (chosen at the start)'
       : 'Lessons need the free Gemini key (Settings)';
 
   return (
@@ -148,7 +148,8 @@ export default function TodayScreen() {
             ) : null}
             <ThemedText themeColor="textSecondary">📖 {lessonLine}</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              Read it, then go deeper, broader or ask your own questions, as long as you like.
+              One paper explained, from the foundations of your topic towards today. Then go
+              deeper, broader or ask your own questions, as long as you like.
             </ThemedText>
             <Pressable
               onPress={() => router.push({ pathname: '/learn', params: { n: String(Date.now()) } })}

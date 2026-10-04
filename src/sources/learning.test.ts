@@ -58,3 +58,22 @@ test('a lesson brings checks and places to go next', () => {
   assert.deepEqual(l.deeper!.map((d) => d.title), ['Coil sensitivities', 'g-factor']);
   assert.equal(l.broader![0].why, '');
 });
+
+test('a reading path keeps only real candidates, once each, and the missing list', async () => {
+  const { parsePath } = await import('./learning');
+  const r = parsePath(
+    JSON.stringify({
+      path: [
+        { id: 'a', era: 'Foundations', why: 'W' },
+        { id: 'zzz', era: 'Recent' },
+        { id: 'a' },
+        { id: 'b' },
+      ],
+      missing: [{ title: 'SENSE', year: '1999', why: 'w' }, { year: 2000 }],
+    }),
+    ['a', 'b']
+  );
+  assert.deepEqual(r.path.map((p) => p.id), ['a', 'b']);
+  assert.equal(r.path[1].era, 'Path');
+  assert.deepEqual(r.missing, [{ title: 'SENSE', year: 1999, why: 'w', era: 'Foundations' }]);
+});

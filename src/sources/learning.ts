@@ -233,3 +233,112 @@ ${CARD_RULES}`;
   const input = [note.title, note.quote && `Quote: ${note.quote}`, note.body].filter(Boolean).join('\n\n');
   return generateJson(g, instruction, input, parseCardList);
 }
+
+// ---- Reading paths -------------------------------------------------------------
+
+export type PathCandidate = {
+  id: string;
+  title: string;
+  year: number | null;
+  citations: number;
+  abstract: string;
+};
+
+export type PathChoice = { id: string; era: string; why: string };
+export type MissingPaper = { title: string; year: number | null; why: string; era: string };
+
+export function parsePath(text: string, ids: string[]): { path: PathChoice[]; missing: MissingPaper[] } {
+  const raw = JSON.parse(text) as { path?: unknown[]; missing?: unknown[] };
+  const seen = new Set<string>();
+  const path = (raw.path ?? [])
+    .map((p) => p as { id?: unknown; era?: unknown; why?: unknown })
+    .map((p) => ({ id: String(p.id ?? ''), era: str(p.era) || 'Path', why: str(p.why) }))
+    .filter((p) => ids.includes(p.id) && !seen.has(p.id) && seen.add(p.id));
+  const missing = (raw.missing ?? [])
+    .map((m) => m as { title?: unknown; year?: unknown; why?: unknown; era?: unknown })
+    .map((m) => ({
+      title: str(m.title),
+      year: Number(m.year) || null,
+      why: str(m.why),
+      era: str(m.era) || 'Foundations',
+    }))
+    .filter((m) => m.title)
+    .slice(0, 6);
+  if (path.length === 0) throw new Error('empty path');
+  return { path, missing };
+}
+
+// Chooses and orders the papers a newcomer must read, from the foundations to today.
+// It may only pick from the candidates (all real, from OpenAlex); papers it thinks are
+// missing come back separately and are looked up before they are added.
+export function buildPath(
+  g: Gemini,
+  topic: { name: string; keywords: string; goal?: string },
+  candidates: PathCandidate[],
+  size = 24
+) {
+  const instruction = `${AUDIENCE}${goalLine(topic.goal)}
+You curate a reading path through the literature of one topic, for someone who wants to
+understand the field from its foundations up to the current state of the art, one paper
+per session. From the candidates (each with year and citation count), choose about
+${size} papers:
+- the foundations every expert knows, the turning points that changed how the field works,
+  the methods everyone uses, the best surveys, and the current state of the art;
+- skip incremental variants, narrow applications, duplicates and papers off the topic;
+- citation counts favour old papers, so judge recent ones by their influence for their age;
+- order them so each builds on the earlier ones: by era ("Foundations", "Milestones",
+  "Recent"), and by year within an era.
+For each chosen paper say in one sentence why it is on the path. Then list up to 5
+must-know papers of this topic that are missing from the candidates (exact title, year).
+
+Answer only with JSON:
+{ "path": [ { "id": "...", "era": "Foundations", "why": "..." } ],
+  "missing": [ { "title": "...", "year": 2015, "era": "Milestones", "why": "..." } ] }`;
+  const input = [
+    `Topic: ${topic.name}`,
+    `Keywords: ${topic.keywords}`,
+    '',
+    ...candidates.map(
+      (c) => `[${c.id}] (${c.year ?? '?'}, ${c.citations} citations) ${c.title}. ${c.abstract.slice(0, 220)}`
+    ),
+  ].join('\n');
+  return generateJson(g, instruction, input, (t) => parsePath(t, candidates.map((c) => c.id)), 0.2);
+}
+
+// One paper of the path, explained by a tutor.
+export function explainPaper(
+  g: Gemini,
+  paper: {
+    title: string;
+    authors: string;
+    year: number | null;
+    venue: string;
+    text: string;
+    fullText: boolean;
+  },
+  context: { topic: string; goal?: string; before: string[]; after: string[]; why: string }
+) {
+  const instruction = `${AUDIENCE}${goalLine(context.goal)}
+You are a patient tutor walking the learner through the literature of "${context.topic}",
+one paper at a time. Explain the paper below so it is understood, in about 500 to 700 words:
+## The problem: what was hard or unknown before this paper.
+## The key idea: the insight, in plain words, with an analogy if one fits.
+## How it works: the method step by step; formulas only where they help, every symbol
+explained.
+## What they showed: the main results, with the important numbers.
+## Why it matters: what it changed and what it led to${context.after.length ? ' (later papers on the path build on it)' : ''}.
+Explain every technical term the first time it appears. Connect it to papers the learner
+has already read where that helps.${paper.fullText ? '' : ' You only have the abstract: say so briefly where details are missing, and do not invent them.'}
+On the path because: ${context.why}
+Already read: ${context.before.slice(-8).join('; ') || 'nothing yet'}.
+Coming later: ${context.after.slice(0, 5).join('; ') || 'nothing'}.
+${LESSON_SHAPE.replace('"deeper": [ { "title": "a concept inside this lesson', '"deeper": [ { "title": "a concept inside this paper')}`;
+  const input = [
+    `Title: ${paper.title}`,
+    `Authors: ${paper.authors}`,
+    `Year: ${paper.year ?? '?'}${paper.venue ? `, ${paper.venue}` : ''}`,
+    '',
+    paper.text,
+  ].join('\n');
+  return generateJson(g, instruction, input, parseLesson, 0.3);
+}

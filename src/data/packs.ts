@@ -1,5 +1,4 @@
 import type { Db } from '@/db/db';
-import { listLessons, addSyllabus } from '@/db/repos/lessons';
 import { addPaper, findPaperByUrl, frontPosition } from '@/db/repos/papers';
 import { addPerson, listPeople, newPerson } from '@/db/repos/people';
 import { getSettings, setSetting } from '@/db/repos/settings';
@@ -76,11 +75,9 @@ async function importTopic(db: Db, pack: Pack) {
     topicId = await addTopic(db, topic);
   }
 
-  let lessons = 0;
-  if (pack.lessons?.length && (await listLessons(db, topicId)).length === 0) {
-    await addSyllabus(db, topicId, pack.lessons);
-    lessons = pack.lessons.length;
-  }
+  // Sessions follow a reading path, planned at the first session; the pack's papers
+  // are in the library and become candidates for it.
+  const lessons = 0;
 
   const fresh = [];
   for (const p of pack.papers ?? []) {

@@ -183,6 +183,11 @@ const MIGRATIONS: string[] = [
   ALTER TABLE lessons ADD COLUMN kind TEXT NOT NULL DEFAULT 'core';
   ALTER TABLE lessons ADD COLUMN prompt TEXT NOT NULL DEFAULT '';
   `,
+  // Reading paths: lessons of kind 'paper', one per paper, from the foundations to today.
+  `
+  ALTER TABLE lessons ADD COLUMN paper_url TEXT NOT NULL DEFAULT '';
+  ALTER TABLE lessons ADD COLUMN paper_meta TEXT NOT NULL DEFAULT '{}';
+  `,
 ];
 
 export async function migrateAndSeed(db: Db) {

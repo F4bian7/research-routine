@@ -56,7 +56,7 @@ function PackCard({ info, added }: { info: PackInfo; added: boolean }) {
         <ThemedText type="small" style={{ color: theme.success }}>
           {result
             ? `Added: ${[
-                result.lessons ? `a course of ${result.lessons} lessons (daily lessons now come from it)` : '',
+                result.topicId !== null ? 'a topic your sessions now focus on (its reading path is chosen at the first session)' : '',
                 result.papers ? `${result.papers} papers at the front of your backlog` : '',
                 `${result.people} people followed (see Feed → People)`,
               ]

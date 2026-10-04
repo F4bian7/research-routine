@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { openUrl } from '@/components/link-button';
 import { MathText } from '@/components/math-text';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -12,6 +13,7 @@ import type { ExploreKind } from '@/sources/learning';
 
 const KIND_LABEL: Record<LessonKind, string> = {
   core: 'Lesson',
+  paper: 'Paper',
   deeper: 'Deeper',
   broader: 'Broader',
   simpler: 'More simply',
@@ -54,6 +56,32 @@ function RichText({ body }: { body: string }) {
   );
 }
 
+// For a paper on the reading path: who, when, where, how cited, why it is on the path.
+function PaperFacts({ lesson }: { lesson: Lesson }) {
+  const theme = useTheme();
+  const m = lesson.paperMeta;
+  const facts = [m.authors, m.year, m.venue, m.citations ? `${m.citations.toLocaleString('en-GB')} citations` : '']
+    .filter(Boolean)
+    .join(' · ');
+  return (
+    <View style={styles.facts}>
+      {facts ? (
+        <ThemedText type="small" themeColor="textSecondary">
+          {facts}
+        </ThemedText>
+      ) : null}
+      {m.why ? <Inline text={`On your path because: ${m.why}`} style={styles.why} /> : null}
+      {lesson.paperUrl ? (
+        <Pressable onPress={() => openUrl(lesson.paperUrl)} hitSlop={8}>
+          <ThemedText type="small" style={{ color: theme.accent }}>
+            Open the paper ↗
+          </ThemedText>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 export function LessonBody({ lesson, topic }: { lesson: Lesson; topic?: Topic | null }) {
   const content = lesson.content;
   return (
@@ -61,12 +89,17 @@ export function LessonBody({ lesson, topic }: { lesson: Lesson; topic?: Topic | 
       <View style={styles.topic}>
         {topic ? <View style={[styles.dot, { backgroundColor: topic.color }]} /> : null}
         <ThemedText type="small" themeColor="textSecondary">
-          {[KIND_LABEL[lesson.kind], topic?.name, lesson.kind === 'core' ? `lesson ${lesson.position}` : '']
+          {[
+            lesson.kind === 'paper' && lesson.paperMeta.era ? lesson.paperMeta.era : KIND_LABEL[lesson.kind],
+            topic?.name,
+            lesson.kind === 'core' ? `lesson ${lesson.position}` : lesson.kind === 'paper' ? `paper ${lesson.position}` : '',
+          ]
             .filter(Boolean)
             .join(' · ')}
         </ThemedText>
       </View>
       <Inline text={lesson.title} style={styles.title} />
+      {lesson.kind === 'paper' ? <PaperFacts lesson={lesson} /> : null}
       {content ? <RichText body={content.body} /> : null}
       {content && content.keyPoints.length > 0 && (
         <ThemedView type="backgroundElement" style={styles.points}>
@@ -211,4 +244,6 @@ const styles = StyleSheet.create({
   option: { borderWidth: 2, borderRadius: Spacing.three, padding: Spacing.three, minHeight: 52, justifyContent: 'center' },
   normal: { fontWeight: 500 },
   step: { borderWidth: 1, borderRadius: Spacing.three, padding: Spacing.three, gap: 2 },
+  facts: { gap: Spacing.one },
+  why: { fontSize: 15, lineHeight: 21, fontStyle: 'italic' },
 });

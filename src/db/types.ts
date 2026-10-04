@@ -169,7 +169,17 @@ export type LessonContent = {
 };
 
 // Core lessons follow the course plan; explorations branch off a lesson on request.
-export type LessonKind = 'core' | 'deeper' | 'broader' | 'simpler' | 'question';
+export type LessonKind = 'core' | 'paper' | 'deeper' | 'broader' | 'simpler' | 'question';
+
+// A paper on a topic's reading path.
+export type PaperMeta = {
+  authors?: string;
+  year?: number | null;
+  venue?: string;
+  citations?: number;
+  era?: string; // e.g. Foundations, Milestones, Recent
+  why?: string; // why it is on the path
+};
 
 export type Lesson = {
   id: number;
@@ -183,4 +193,6 @@ export type Lesson = {
   parentId: number | null; // the lesson an exploration branched off
   kind: LessonKind;
   prompt: string; // the question asked, for kind 'question'
+  paperUrl: string; // for kind 'paper': arXiv or DOI link
+  paperMeta: PaperMeta;
 };
