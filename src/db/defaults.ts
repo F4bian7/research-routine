@@ -2,10 +2,8 @@ import type { DayTask, QuickLink, Settings } from './types';
 
 export const DEFAULT_QUICK_LINKS: QuickLink[] = [
   { id: 'scholarInbox', label: 'Scholar Inbox', url: 'https://www.scholar-inbox.com' },
-  { id: 'bluesky', label: 'Bluesky list', url: 'https://bsky.app' },
   { id: 'x', label: 'X list', url: 'https://x.com' },
   { id: 'alphaxiv', label: 'alphaXiv', url: 'https://www.alphaxiv.org' },
-  { id: 'hfPapers', label: 'Hugging Face Daily Papers', url: 'https://huggingface.co/papers' },
 ];
 
 export const DEFAULT_SETTINGS: Settings = {

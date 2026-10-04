@@ -22,7 +22,7 @@ It ships as an installable web app (PWA) on GitHub Pages:
 | English UI | done |
 | Topics tab: names, colours, feed keywords | done |
 | People you follow | open |
-| Settings: routine, reminder, quick links, JSON export/import | open |
+| Settings: routine, weekend rule, reminder (calendar or Shortcuts), quick links, JSON backup | done |
 
 ## Install on the iPhone
 
@@ -32,7 +32,7 @@ It ships as an installable web app (PWA) on GitHub Pages:
 
 Data lives in the browser storage of the home screen app (SQLite via sql.js, saved to
 IndexedDB). Home screen apps are exempt from Safari's automatic data deletion, but
-removing the icon deletes the data. Use the JSON export as a backup once it exists.
+removing the icon deletes the data. Export a JSON backup in Settings now and then.
 
 Updates: every push to `main` deploys automatically. The app picks up the new version on
 the next start while online.
@@ -40,8 +40,8 @@ the next start while online.
 ## Differences from a native build
 
 - No share target: copy a link and use "Aus Zwischenablage einfügen" in the backlog.
-- No scheduled local notifications: use an automation in the Shortcuts app instead
-  (time of day, daily, "Run immediately", action "Open app" or "Show notification").
+- No scheduled local notifications: Settings creates a repeating calendar event with an
+  alert, or use an automation in the Shortcuts app (steps are in Settings).
 
 The native build (Expo Go or a development build) still works from the same code; only
 the database backend differs (`src/db/db-provider.tsx` vs `db-provider.web.tsx`).
