@@ -4,11 +4,13 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { openReader, PaperCard, paperMeta } from '@/components/paper-card';
+import { BrainButton } from '@/components/brain-button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button, Chip, Field, Row } from '@/components/ui';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useQuery } from '@/data/use-query';
+import { paperSource } from '@/data/brain';
 import { type Db, useDb } from '@/db/db';
 import { listArchive, listQueued, markRead, postpone } from '@/db/repos/papers';
 import { listTopics } from '@/db/repos/topics';
@@ -98,6 +100,7 @@ export default function BacklogScreen() {
                     <Button label="Mark read" style={styles.flex} onPress={() => markRead(db, top.id)} />
                     <Button label="Later" style={styles.flex} onPress={() => postpone(db, top.id)} />
                   </View>
+                  <BrainButton source={() => (d: Db) => paperSource(d, top)} />
                 </PaperCard>
               ) : (
                 <ThemedText themeColor="textSecondary">

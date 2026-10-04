@@ -3,7 +3,9 @@ import { useCallback } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BrainButton } from '@/components/brain-button';
 import { Checks, LessonBody } from '@/components/lesson-view';
+import { lessonSource } from '@/data/brain';
 import { goBack, ScreenBar } from '@/components/screen-bar';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -47,6 +49,7 @@ export default function LessonScreen() {
                   <LessonBody lesson={e} />
                 </View>
               ))}
+              <BrainButton source={() => lessonSource([data.lesson!, ...data.explorations])} />
               <Button
                 label="Continue exploring from here"
                 variant="primary"

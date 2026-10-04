@@ -3,7 +3,9 @@ import { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BrainButton } from '@/components/brain-button';
 import { Checks, LessonBody, NextSteps } from '@/components/lesson-view';
+import { lessonSource } from '@/data/brain';
 import { goBack, ScreenBar } from '@/components/screen-bar';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -20,7 +22,6 @@ import {
   XP,
 } from '@/data/learn';
 import { useDb } from '@/db/db';
-import { addNote } from '@/db/repos/notes';
 import { getLesson, listExplorations } from '@/db/repos/lessons';
 import { totalXp } from '@/db/repos/learn';
 import { listTopics } from '@/db/repos/topics';
@@ -52,7 +53,6 @@ export default function LearnScreen() {
   const [xp, setXp] = useState(0);
   const [total, setTotal] = useState(0);
   const [next, setNext] = useState<string | null>(null);
-  const [saved, setSaved] = useState<number[]>([]);
   const scroll = useRef<ScrollView>(null);
   const positions = useRef(new Map<number, number>());
   const scrollTo = useRef<number | null>(null);
@@ -124,20 +124,6 @@ export default function LearnScreen() {
     setPhase('done');
   }
 
-  async function saveAsNote(b: Lesson) {
-    await addNote(db, {
-      title: b.title,
-      body: [b.content?.keyPoints.map((k) => `- ${k}`).join('\n') ?? '', `From the lesson [[${blocks[0].title}]]`]
-        .filter(Boolean)
-        .join('\n\n'),
-      quote: '',
-      paperId: null,
-      topicIds: b.topicId ? [b.topicId] : [],
-      personIds: [],
-    });
-    setSaved((s) => [...s, b.id]);
-  }
-
   const last = blocks[blocks.length - 1];
 
   return (
@@ -191,12 +177,6 @@ export default function LearnScreen() {
                 onLayout={(e) => positions.current.set(b.id, e.nativeEvent.layout.y)}>
                 <LessonBody lesson={b} topic={b === blocks[0] ? topic : null} />
                 <Checks lesson={b} onAnswer={(right) => right && setXp((x) => x + XP.quizRight)} />
-                <Button
-                  label={saved.includes(b.id) ? 'Saved to your notes ✓' : 'Save key points as a note'}
-                  variant="ghost"
-                  disabled={saved.includes(b.id)}
-                  onPress={() => saveAsNote(b)}
-                />
               </View>
             ))}
 
@@ -205,6 +185,7 @@ export default function LearnScreen() {
               <NextSteps lesson={last} busy={!!busy} onExplore={go} />
               {busy ? <ThemedText style={{ color: theme.accent }}>{busy}</ThemedText> : null}
               {error ? <ThemedText style={styles.error}>{error}</ThemedText> : null}
+              <BrainButton source={() => lessonSource(blocks)} />
               <Button label="Finish session" variant="primary" disabled={!!busy} onPress={finish} />
             </>
           )}
@@ -221,6 +202,7 @@ export default function LearnScreen() {
                 variant="primary"
                 onPress={() => router.replace({ pathname: '/learn', params: { n: String(Date.now()) } })}
               />
+              <BrainButton source={() => lessonSource(blocks)} label="🧠 Notes from this session" />
               <Button label="Back to Today" onPress={() => router.replace(TODAY)} />
             </View>
           )}

@@ -4,7 +4,9 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { goBack, ScreenBar } from '@/components/screen-bar';
+import { MathText } from '@/components/math-text';
 import { ThemedText } from '@/components/themed-text';
+import { hasMath } from '@/domain/math';
 import { ThemedView } from '@/components/themed-view';
 import { Button, Chip, Row } from '@/components/ui';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -51,7 +53,7 @@ export default function NoteScreen() {
 
   const renderLinks = (text: string, style: object) =>
     splitLinks(text).map((s, i) => {
-      if ('text' in s) return s.text;
+      if ('text' in s) return hasMath(s.text) ? <MathText key={i} text={s.text} style={style} /> : s.text;
       const target = findByTitle(all, s.link);
       return (
         <ThemedText

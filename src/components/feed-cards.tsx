@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 
 import { openUrl } from '@/components/link-button';
+import { BrainChip } from '@/components/brain-button';
 import { MathText } from '@/components/math-text';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Chip, Row } from '@/components/ui';
@@ -40,6 +41,11 @@ export function postInput(p: BlueskyPost): BriefInput {
 
 // The plain-language layer on top of an item: rating for the reader, what it is, why it
 // matters, and a longer explanation on request.
+// What the brief explained, as source text for note suggestions.
+function briefText(b?: Brief) {
+  return b ? [b.gist, b.why, b.more].filter(Boolean).join('\n') : '';
+}
+
 export function BriefBox({ brief, input }: { brief?: Brief; input: BriefInput }) {
   const db = useDb();
   const theme = useTheme();
@@ -156,6 +162,16 @@ export function FeedPaperCard({
           onPress={() => setFeedDecision(db, paper.id, decision === 'up' ? null : 'up')}
         />
         <Chip label="👎" selected={false} onPress={() => setFeedDecision(db, paper.id, 'down')} />
+        <BrainChip
+          source={() => ({
+            kind: 'paper',
+            title: paper.title,
+            text: [paper.abstract, briefText(brief)].filter(Boolean).join('\n\n'),
+            url: paper.url,
+            feedPaper: paper,
+            topicId: paper.topicId,
+          })}
+        />
       </Row>
     </View>
   );
@@ -225,6 +241,16 @@ export function BlueskyPostCard({ post, saved, brief }: { post: BlueskyPost; sav
           </>
         ) : null}
         <Chip label="Bluesky ↗" selected={false} onPress={() => openUrl(post.url)} />
+        <BrainChip
+          source={() => ({
+            kind: `Bluesky post by ${post.author}`,
+            title: post.link?.title || post.text.slice(0, 80),
+            text: [post.text, post.link ? `${post.link.title}\n${post.link.description}` : '', briefText(brief)]
+              .filter(Boolean)
+              .join('\n\n'),
+            url: post.link?.uri || post.url,
+          })}
+        />
       </Row>
       {busy ? (
         <ThemedText type="small" themeColor="textSecondary">
@@ -335,6 +361,16 @@ export function WebCard({ item, brief }: { item: WebItem; brief?: Brief }) {
           </ThemedText>
         </Pressable>
       ) : null}
+      <Row>
+        <BrainChip
+          source={() => ({
+            kind: SOURCE_LABEL[item.source],
+            title: item.title,
+            text: [item.title, item.summary, briefText(brief)].filter(Boolean).join('\n\n'),
+            url: item.url,
+          })}
+        />
+      </Row>
     </View>
   );
 }

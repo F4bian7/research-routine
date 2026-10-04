@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { mathAsText } from '@/domain/math';
 import { Button, Field } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { filesSupported, saveFile } from '@/data/files';
@@ -65,7 +66,7 @@ export function NotesView({ topics }: { topics: Topic[] }) {
                   {n.title}
                 </ThemedText>
                 <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>
-                  {n.quote ? `“${n.quote}”` : n.body || ' '}
+                  {n.quote ? `“${n.quote}”` : mathAsText(n.body) || ' '}
                 </ThemedText>
               </View>
               <View style={styles.dots}>

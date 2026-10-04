@@ -7,11 +7,13 @@ import { openUrl } from '@/components/link-button';
 import { paperMeta } from '@/components/paper-card';
 import { PaperContent } from '@/components/paper-content';
 import { PaperNotes } from '@/components/paper-extras';
+import { BrainButton } from '@/components/brain-button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button, Chip, Field, Row } from '@/components/ui';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useQuery } from '@/data/use-query';
+import { paperSource } from '@/data/brain';
 import { type Db, useDb } from '@/db/db';
 import { deletePaper, getPaper, markRead, postpone, requeue, updatePaper } from '@/db/repos/papers';
 import { listTopics } from '@/db/repos/topics';
@@ -93,6 +95,8 @@ export default function ReaderScreen() {
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
             <PaperNotes paper={paper} />
+
+            <BrainButton source={() => (d: Db) => paperSource(d, paper)} />
 
             <Field
               label="Quick note (shown in the archive)"

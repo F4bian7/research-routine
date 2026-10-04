@@ -1,8 +1,7 @@
 import { router } from 'expo-router';
 
 import type { Db } from '@/db/db';
-import { setFeedDecision } from '@/db/repos/feed';
-import { addPaper, findPaperByUrl } from '@/db/repos/papers';
+import { saveFeedPaper } from './save-paper';
 import type { Topic } from '@/db/types';
 import { addDays, todayKey } from '@/domain/dates';
 import { keywordQuery, parseKeywords } from '@/domain/keywords';
@@ -113,23 +112,7 @@ export function loadBluesky(
   );
 }
 
-// Puts a feed paper into the backlog (once) and returns its id.
-export async function saveFeedPaper(db: Db, p: FeedPaper): Promise<number> {
-  const url = canonicalUrl(parsePaperLink(p.url));
-  const existing = await findPaperByUrl(db, url);
-  const id =
-    existing?.id ??
-    (await addPaper(db, {
-      title: p.title,
-      url,
-      authors: p.authors,
-      year: p.year,
-      topicId: p.topicId,
-      type: 'other',
-    }));
-  await setFeedDecision(db, p.id, 'saved');
-  return id;
-}
+export { saveFeedPaper };
 
 export async function readFeedPaper(db: Db, p: FeedPaper) {
   const id = await saveFeedPaper(db, p);

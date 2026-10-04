@@ -19,6 +19,7 @@ export default function RootLayout() {
           <Stack.Screen name="person/follow" />
           <Stack.Screen name="note/[id]" />
           <Stack.Screen name="note/edit" />
+          <Stack.Screen name="note/suggest" />
           <Stack.Screen name="card/edit" />
           <Stack.Screen name="lesson/[id]" />
           <Stack.Screen name="learn" />

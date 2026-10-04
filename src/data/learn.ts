@@ -178,7 +178,7 @@ export async function completeSession(
 }
 
 // Puts the paper of a finished path session into the library as read.
-export async function markPaperRead(db: Db, lesson: Lesson) {
+export async function markPaperRead(db: Db, lesson: Lesson): Promise<number> {
   const url = canonicalUrl(parsePaperLink(lesson.paperUrl));
   const existing = await findPaperByUrl(db, url);
   const id =
@@ -193,4 +193,5 @@ export async function markPaperRead(db: Db, lesson: Lesson) {
       note: lesson.paperMeta.why ?? '',
     }));
   if (existing?.status !== 'read') await markRead(db, id);
+  return id;
 }
