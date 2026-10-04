@@ -21,7 +21,7 @@ It ships as an installable web app (PWA) on GitHub Pages:
 | "Ask Claude": hands the paper to a claude.ai chat for follow-up questions | done |
 | English UI | done |
 | Topics tab: names, colours, feed keywords | done |
-| People you follow | open |
+| People: links, newest papers (OpenAlex) and Bluesky posts per person | done |
 | Settings: routine, weekend rule, reminder (calendar or Shortcuts), quick links, JSON backup | done |
 
 ## Install on the iPhone

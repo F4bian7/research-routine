@@ -96,6 +96,10 @@ const MIGRATIONS: string[] = [
     at TEXT NOT NULL
   );
   `,
+  // People: the matching OpenAlex author, for their recent papers inside the app.
+  `
+  ALTER TABLE people ADD COLUMN openalex_id TEXT;
+  `,
 ];
 
 export async function migrateAndSeed(db: Db) {

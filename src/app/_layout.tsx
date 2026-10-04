@@ -12,6 +12,8 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="paper/[id]" />
           <Stack.Screen name="paper/new" />
+          <Stack.Screen name="person/[id]" />
+          <Stack.Screen name="person/edit" />
         </Stack>
       </DbProvider>
     </ThemeProvider>

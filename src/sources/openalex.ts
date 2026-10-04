@@ -93,3 +93,52 @@ export async function searchRecent(
   const data = (await res.json()) as { results?: Work[] };
   return (data.results ?? []).map((w) => workToFeedPaper(w, topicId)).filter((p) => p.title);
 }
+
+export type AuthorCandidate = {
+  id: string; // short id, e.g. "A5072647800"
+  name: string;
+  institutions: string[];
+  works: number;
+  citations: number;
+  topic: string;
+};
+
+type AuthorRow = {
+  id: string;
+  display_name: string;
+  last_known_institutions?: { display_name: string }[] | null;
+  works_count?: number;
+  cited_by_count?: number;
+  topics?: { display_name: string }[] | null;
+};
+
+export async function searchAuthors(name: string): Promise<AuthorCandidate[]> {
+  const url =
+    `https://api.openalex.org/authors?search=${encodeURIComponent(name)}&per_page=6` +
+    '&select=id,display_name,last_known_institutions,works_count,cited_by_count,topics';
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`OpenAlex ${res.status}`);
+  const data = (await res.json()) as { results?: AuthorRow[] };
+  // Most prolific first: the real profile usually has far more works than its split-off duplicates.
+  return (data.results ?? [])
+    .map((a) => ({
+    id: a.id.split('/').pop() ?? a.id,
+    name: a.display_name,
+    institutions: (a.last_known_institutions ?? []).map((i) => i.display_name),
+    works: a.works_count ?? 0,
+    citations: a.cited_by_count ?? 0,
+    topic: a.topics?.[0]?.display_name ?? '',
+  }))
+    .sort((x, y) => y.works - x.works);
+}
+
+// An author's newest works, as feed papers.
+export async function authorWorks(authorId: string): Promise<FeedPaper[]> {
+  const url =
+    `https://api.openalex.org/works?filter=author.id:${encodeURIComponent(authorId)}` +
+    `&sort=publication_date:desc&per_page=20&select=${SELECT}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`OpenAlex ${res.status}`);
+  const data = (await res.json()) as { results?: Work[] };
+  return (data.results ?? []).map((w) => workToFeedPaper(w, null)).filter((p) => p.title);
+}

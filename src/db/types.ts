@@ -21,6 +21,7 @@ export type Person = {
   institution: string;
   topicIds: number[];
   links: PersonLinks;
+  openalexId: string | null; // e.g. "A5072647800"
 };
 
 export type PaperType = 'survey' | 'milestone' | 'best_paper' | 'challenge' | 'other';

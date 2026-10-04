@@ -8,12 +8,15 @@ import { Button, Chip, Field, Row } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { backupFileName, BackupError, exportBackup, importBackup } from '@/data/backup';
 import { filesSupported, pickTextFile, saveFile } from '@/data/files';
+import { useQuery } from '@/data/use-query';
 import { useDb } from '@/db/db';
+import { listPeople } from '@/db/repos/people';
 import { DEFAULT_SETTINGS } from '@/db/defaults';
 import { saveDayTask } from '@/db/repos/routine';
 import { setSetting } from '@/db/repos/settings';
 import type { DayTask, QuickLink, Settings, TaskKind } from '@/db/types';
 import { todayKey, WEEKDAY_LONG, WEEKDAY_SHORT } from '@/domain/dates';
+import { blueskyHandle } from '@/domain/person-links';
 import { parseTime, reminderIcs } from '@/domain/reminder';
 import { useTheme } from '@/hooks/use-theme';
 import { checkKey, explainError } from '@/sources/gemini';
@@ -296,6 +299,8 @@ export function GeminiSection({ settings }: { settings: Settings }) {
 export function BlueskySection({ settings }: { settings: Settings }) {
   const db = useDb();
   const [source, setSource] = useState(settings.blueskySource);
+  const people = useQuery(listPeople) ?? [];
+  const handles = people.map((p) => blueskyHandle(p.links.bluesky)).filter((h): h is string => !!h);
   return (
     <Section title="Bluesky feed">
       <Hint>
@@ -311,6 +316,16 @@ export function BlueskySection({ settings }: { settings: Settings }) {
         autoCorrect={false}
         placeholder="https://bsky.app/profile/…/lists/…"
       />
+      {handles.length > 0 && (
+        <Button
+          label={`Use my people's accounts (${handles.length})`}
+          onPress={() => {
+            const next = handles.join(', ');
+            setSource(next);
+            setSetting(db, 'blueskySource', next);
+          }}
+        />
+      )}
     </Section>
   );
 }
