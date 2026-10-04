@@ -4,8 +4,9 @@ import { addPaper, findPaperByUrl, frontPosition } from '@/db/repos/papers';
 import { addPerson, listPeople, newPerson } from '@/db/repos/people';
 import { getSettings, setSetting } from '@/db/repos/settings';
 import { addTopic, listTopics, updateTopic } from '@/db/repos/topics';
-import type { PaperType } from '@/db/types';
+import type { PaperType, PersonLinks } from '@/db/types';
 import { normalizeName } from '@/domain/match';
+import { resolveDid } from '@/sources/bluesky';
 import { canonicalUrl, parsePaperLink } from '@/sources/links';
 
 // Study packs: a ready-made topic with its goal, a course outline, papers in reading
@@ -16,10 +17,19 @@ export type PackInfo = { id: string; title: string; description: string };
 export type Pack = {
   id: string;
   title: string;
-  topic: { name: string; color: string; keywords: string; goal: string };
-  lessons: { title: string; outline: string }[];
-  papers: { title: string; authors: string; year: number; url: string; type: PaperType; why?: string }[];
-  people: { name: string; why: string; openalexIds?: string[]; orcid?: string; institution?: string }[];
+  // A pack may only bring people (e.g. voices outside academia).
+  topic?: { name: string; color: string; keywords: string; goal: string };
+  lessons?: { title: string; outline: string }[];
+  papers?: { title: string; authors: string; year: number; url: string; type: PaperType; why?: string }[];
+  // People with OpenAlex ids or links are followed; the others are suggestions.
+  people: {
+    name: string;
+    why: string;
+    openalexIds?: string[];
+    orcid?: string;
+    institution?: string;
+    links?: PersonLinks;
+  }[];
 };
 
 const BASE = process.env.EXPO_BASE_URL ?? '';
@@ -36,34 +46,44 @@ export async function loadPack(id: string): Promise<Pack> {
   return (await res.json()) as Pack;
 }
 
-export type PackResult = { topicId: number; lessons: number; papers: number; people: number };
+export type PackResult = { topicId: number | null; lessons: number; papers: number; people: number };
 
 // Adds a pack without touching anything that is already there: an existing topic of
 // the same name is reused, known papers and people are skipped. The pack's papers go
 // to the front of the queue, and its course gets the daily lessons.
 export async function importPack(db: Db, pack: Pack): Promise<PackResult> {
+  const { topicId, lessons, papers } = pack.topic ? await importTopic(db, pack) : { topicId: null, lessons: 0, papers: 0 };
+  const people = await importPeople(db, pack, topicId);
+  const settings = await getSettings(db);
+  if (topicId !== null) await setSetting(db, 'focusTopicId', topicId);
+  if (!settings.packs.includes(pack.id)) await setSetting(db, 'packs', [...settings.packs, pack.id]);
+  return { topicId, lessons, papers, people };
+}
+
+async function importTopic(db: Db, pack: Pack) {
+  const topic = pack.topic!;
   const topics = await listTopics(db);
-  const existing = topics.find((t) => t.name.trim().toLowerCase() === pack.topic.name.trim().toLowerCase());
+  const existing = topics.find((t) => t.name.trim().toLowerCase() === topic.name.trim().toLowerCase());
   let topicId: number;
   if (existing) {
     topicId = existing.id;
     await updateTopic(db, {
       ...existing,
-      keywords: existing.keywords || pack.topic.keywords,
-      goal: existing.goal || pack.topic.goal,
+      keywords: existing.keywords || topic.keywords,
+      goal: existing.goal || topic.goal,
     });
   } else {
-    topicId = await addTopic(db, pack.topic);
+    topicId = await addTopic(db, topic);
   }
 
   let lessons = 0;
-  if ((await listLessons(db, topicId)).length === 0) {
+  if (pack.lessons?.length && (await listLessons(db, topicId)).length === 0) {
     await addSyllabus(db, topicId, pack.lessons);
     lessons = pack.lessons.length;
   }
 
   const fresh = [];
-  for (const p of pack.papers) {
+  for (const p of pack.papers ?? []) {
     const url = canonicalUrl(parsePaperLink(p.url));
     if (!(await findPaperByUrl(db, url))) fresh.push({ ...p, url });
   }
@@ -76,11 +96,17 @@ export async function importPack(db: Db, pack: Pack): Promise<PackResult> {
     );
   }
 
+  return { topicId, lessons, papers: fresh.length };
+}
+
+async function importPeople(db: Db, pack: Pack, topicId: number | null) {
   const people = await listPeople(db);
   let followed = 0;
-  for (const p of pack.people.filter((x) => x.openalexIds?.length)) {
+  for (const p of pack.people.filter((x) => x.openalexIds?.length || x.links)) {
     const known = people.some(
-      (q) => q.openalexIds.some((id) => p.openalexIds!.includes(id)) || normalizeName(q.name) === normalizeName(p.name)
+      (q) =>
+        q.openalexIds.some((id) => (p.openalexIds ?? []).includes(id)) ||
+        normalizeName(q.name) === normalizeName(p.name)
     );
     if (known) continue;
     await addPerson(
@@ -88,17 +114,16 @@ export async function importPack(db: Db, pack: Pack): Promise<PackResult> {
       newPerson({
         name: p.name,
         institution: p.institution ?? '',
-        topicIds: [topicId],
-        openalexIds: p.openalexIds,
+        topicIds: topicId !== null ? [topicId] : [],
+        links: p.links ?? {},
+        openalexIds: p.openalexIds ?? [],
         orcid: p.orcid ?? null,
+        // The permanent Bluesky id survives handle changes.
+        blueskyDid: p.links?.bluesky ? await resolveDid(p.links.bluesky) : null,
         checkedAt: new Date().toISOString(),
       })
     );
     followed += 1;
   }
-
-  const settings = await getSettings(db);
-  await setSetting(db, 'focusTopicId', topicId);
-  if (!settings.packs.includes(pack.id)) await setSetting(db, 'packs', [...settings.packs, pack.id]);
-  return { topicId, lessons, papers: fresh.length, people: followed };
+  return followed;
 }

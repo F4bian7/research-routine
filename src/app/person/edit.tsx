@@ -23,6 +23,8 @@ const LINK_HINT: Record<keyof PersonLinks, string> = {
   bluesky: 'Handle, e.g. name.bsky.social',
   x: 'Handle, e.g. @name',
   website: 'Link',
+  github: 'User name, e.g. karpathy',
+  blog: 'RSS or Atom feed URL, e.g. https://example.com/feed.xml',
 };
 
 function goBack() {

@@ -13,6 +13,7 @@ import type { Topic } from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
 import type { TimelineItem } from '@/data/people';
 import type { BlueskyPost, FeedPaper } from '@/sources/feed-types';
+import type { WebItem } from '@/sources/web';
 
 function relativeTime(iso: string) {
   const ms = Date.now() - new Date(iso).getTime();
@@ -179,7 +180,16 @@ export function TimelineCard({
   decisions: Map<string, FeedDecision>;
 }) {
   const theme = useTheme();
-  const what = item.kind === 'paper' ? 'published a paper' : 'posted on Bluesky';
+  const what =
+    item.kind === 'paper'
+      ? 'published a paper'
+      : item.kind === 'post'
+        ? 'posted on Bluesky'
+        : item.item.source === 'blog'
+          ? 'wrote a blog post'
+          : item.item.source === 'github'
+            ? 'started a GitHub project'
+            : 'is discussed on Hacker News';
   return (
     <View style={styles.timeline}>
       <Pressable
@@ -202,9 +212,50 @@ export function TimelineCard({
       </Pressable>
       {item.kind === 'paper' ? (
         <FeedPaperCard paper={item.paper} decision={decisions.get(item.paper.id)} />
-      ) : (
+      ) : item.kind === 'post' ? (
         <BlueskyPostCard post={item.post} saved={decisions.get(bskyKey(item.post)) === 'saved'} />
+      ) : (
+        <WebCard item={item.item} />
       )}
+    </View>
+  );
+}
+
+const SOURCE_LABEL = { blog: 'Blog', github: 'GitHub', hn: 'Hacker News' } as const;
+
+// A blog post, GitHub project or Hacker News story.
+export function WebCard({ item }: { item: WebItem }) {
+  const theme = useTheme();
+  const meta = [
+    SOURCE_LABEL[item.source],
+    relativeTime(item.at),
+    item.points !== undefined ? (item.source === 'github' ? `★ ${item.points}` : `▲ ${item.points}`) : '',
+    item.comments ? `${item.comments} comments` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  return (
+    <View style={[styles.card, { borderColor: theme.border }]}>
+      <ThemedText type="small" themeColor="textSecondary">
+        {meta}
+      </ThemedText>
+      <Pressable onPress={() => openUrl(item.url)}>
+        <ThemedText type="smallBold" style={styles.title}>
+          {item.title} ↗
+        </ThemedText>
+      </Pressable>
+      {item.summary ? (
+        <ThemedText type="small" themeColor="textSecondary" numberOfLines={3}>
+          {item.summary}
+        </ThemedText>
+      ) : null}
+      {item.discussion && item.discussion !== item.url ? (
+        <Pressable onPress={() => openUrl(item.discussion!)}>
+          <ThemedText type="small" style={{ color: theme.accent }}>
+            Read the discussion ↗
+          </ThemedText>
+        </Pressable>
+      ) : null}
     </View>
   );
 }

@@ -9,23 +9,26 @@ import {
   FeedMessage,
   FeedPaperCard,
   TimelineCard,
+  WebCard,
 } from '@/components/feed-cards';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button, Chip, Row } from '@/components/ui';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { loadBluesky, loadNewPapers, loadTrending, NEW_PAPERS_DAYS } from '@/data/feeds';
+import { type Highlights, loadBluesky, loadHighlights, loadNewPapers, NEW_PAPERS_DAYS } from '@/data/feeds';
 import { openAlexHint } from '@/sources/openalex-client';
 import { checkDuePeople, loadTimeline, peopleKey, type Timeline } from '@/data/people';
 import { useQuery } from '@/data/use-query';
 import { type Db, useDb } from '@/db/db';
-import { getFeedDecisions } from '@/db/repos/feed';
+import { type FeedDecision, getFeedDecisions } from '@/db/repos/feed';
 import { listPeople } from '@/db/repos/people';
 import { getSettings } from '@/db/repos/settings';
 import { listTopics } from '@/db/repos/topics';
 import type { BlueskyPost, FeedPaper } from '@/sources/feed-types';
 
-export type FeedTab = 'people' | 'new' | 'trending' | 'bluesky';
+// 'trending' is kept as an alias: older links (Today card) open Highlights → AI.
+export type FeedTab = 'people' | 'new' | 'highlights' | 'trending' | 'bluesky';
+type HighlightView = 'papers' | 'news' | 'hn' | 'ai';
 
 type Load<T> = { state: 'loading' } | { state: 'error' } | { state: 'done'; items: T[] };
 
@@ -44,14 +47,28 @@ async function loadContext(db: Db) {
 }
 
 type Result =
-  | { key: string; ok: true; papers: FeedPaper[]; posts: BlueskyPost[]; timeline?: Timeline }
+  | {
+      key: string;
+      ok: true;
+      papers: FeedPaper[];
+      posts: BlueskyPost[];
+      timeline?: Timeline;
+      highlights?: Highlights;
+    }
   | { key: string; ok: false; message: string };
 
 function fetchFeed(
   tab: FeedTab,
   ctx: Awaited<ReturnType<typeof loadContext>>,
   refresh: boolean
-): Promise<{ papers: FeedPaper[]; posts: BlueskyPost[]; timeline?: Timeline }> {
+): Promise<{ papers: FeedPaper[]; posts: BlueskyPost[]; timeline?: Timeline; highlights?: Highlights }> {
+  if (tab === 'highlights') {
+    return loadHighlights(ctx.settings.newsAccounts, refresh).then((highlights) => ({
+      papers: [],
+      posts: [],
+      highlights,
+    }));
+  }
   if (tab === 'people') {
     return loadTimeline(ctx.people, refresh).then((timeline) => ({ papers: [], posts: [], timeline }));
   }
@@ -61,8 +78,7 @@ function fetchFeed(
       posts,
     }));
   }
-  const load = tab === 'new' ? loadNewPapers(ctx.topics, refresh) : loadTrending(refresh);
-  return load.then((papers) => ({ papers, posts: [] }));
+  return loadNewPapers(ctx.topics, refresh).then((papers) => ({ papers, posts: [] }));
 }
 
 export default function FeedScreen() {
@@ -70,7 +86,9 @@ export default function FeedScreen() {
   // The tab lives in the route, so the "Today" card can open a specific feed.
   const ctx = useQuery(loadContext);
   // Without anyone followed the people timeline would be empty, so start with "New".
-  const tab: FeedTab = params.tab ?? (ctx && ctx.people.length === 0 ? 'new' : 'people');
+  const asked = params.tab === 'trending' ? 'highlights' : params.tab;
+  const tab: FeedTab = asked ?? (ctx && ctx.people.length === 0 ? 'new' : 'people');
+  const [sub, setSub] = useState<HighlightView>(params.tab === 'trending' ? 'ai' : 'papers');
   const setTab = (t: FeedTab) => router.setParams({ tab: t });
   const [topicId, setTopicId] = useState<number | null>(null);
   const [result, setResult] = useState<Result | null>(null);
@@ -87,6 +105,7 @@ export default function FeedScreen() {
         tab,
         ctx.topics.map((t) => `${t.id}=${t.keywords}`).join(','),
         ctx.settings.blueskySource,
+        ctx.settings.newsAccounts,
         peopleKey(ctx.people),
       ].join('|')
     : null;
@@ -147,7 +166,7 @@ export default function FeedScreen() {
           <Row>
             <Chip label="People" selected={tab === 'people'} onPress={() => setTab('people')} />
             <Chip label="New" selected={tab === 'new'} onPress={() => setTab('new')} />
-            <Chip label="Trending" selected={tab === 'trending'} onPress={() => setTab('trending')} />
+            <Chip label="Highlights" selected={tab === 'highlights'} onPress={() => setTab('highlights')} />
             <Chip label="Bluesky" selected={tab === 'bluesky'} onPress={() => setTab('bluesky')} />
           </Row>
 
@@ -177,10 +196,27 @@ export default function FeedScreen() {
               Papers and Bluesky posts of the {ctx.people.length} people you follow, newest first.
             </ThemedText>
           )}
-          {tab === 'trending' && (
-            <ThemedText type="small" themeColor="textSecondary">
-              Hugging Face Daily Papers, most upvoted first. Mostly machine learning in general.
-            </ThemedText>
+          {tab === 'highlights' && (
+            <>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <Row style={styles.noWrap}>
+                  <Chip label="Top papers" selected={sub === 'papers'} onPress={() => setSub('papers')} />
+                  <Chip label="Science news" selected={sub === 'news'} onPress={() => setSub('news')} />
+                  <Chip label="Hacker News" selected={sub === 'hn'} onPress={() => setSub('hn')} />
+                  <Chip label="AI trending" selected={sub === 'ai'} onPress={() => setSub('ai')} />
+                </Row>
+              </ScrollView>
+              <ThemedText type="small" themeColor="textSecondary">
+                {
+                  {
+                    papers: 'The most cited papers of the last 30 days, across all of science.',
+                    news: 'Science news from Nature, Science and New Scientist on Bluesky (change the accounts in Settings).',
+                    hn: 'The most discussed stories on Hacker News this week: tech, AI and science.',
+                    ai: 'Hugging Face Daily Papers, most upvoted first: what the ML community reads.',
+                  }[sub]
+                }
+              </ThemedText>
+            </>
           )}
           {tab === 'bluesky' && (
             <ThemedText type="small" themeColor="textSecondary">
@@ -190,7 +226,15 @@ export default function FeedScreen() {
             </ThemedText>
           )}
 
-          {tab === 'people' ? (
+          {tab === 'highlights' ? (
+            !current ? (
+              <FeedMessage text="Loading …" />
+            ) : !current.ok ? (
+              <FeedMessage text={current.message} onRetry={refresh} />
+            ) : (
+              <HighlightList h={current.highlights!} sub={sub} decisions={decisions} />
+            )
+          ) : tab === 'people' ? (
             ctx.people.length === 0 ? (
               <FeedMessage text='Follow researchers in the Brain tab (People) to see their papers and posts here.' />
             ) : !current ? (
@@ -201,10 +245,16 @@ export default function FeedScreen() {
               <FeedMessage text="Nothing new from the people you follow." />
             ) : (
               current.timeline.items
-                .filter((i) => i.kind === 'post' || decisions.get(i.paper.id) !== 'down')
+                .filter((i) => i.kind !== 'paper' || decisions.get(i.paper.id) !== 'down')
                 .map((i) => (
                   <TimelineCard
-                    key={i.kind === 'post' ? i.post.uri : `${i.person.id}:${i.paper.id}`}
+                    key={
+                      i.kind === 'post'
+                        ? i.post.uri
+                        : i.kind === 'web'
+                          ? `${i.person.id}:${i.item.id}`
+                          : `${i.person.id}:${i.paper.id}`
+                    }
                     item={i}
                     avatar={current.timeline!.avatars.get(String(i.person.id))}
                     decisions={decisions}
@@ -248,6 +298,49 @@ export default function FeedScreen() {
         </ScrollView>
       </SafeAreaView>
     </ThemedView>
+  );
+}
+
+function HighlightList({
+  h,
+  sub,
+  decisions,
+}: {
+  h: Highlights;
+  sub: HighlightView;
+  decisions: Map<string, FeedDecision>;
+}) {
+  if (sub === 'news') {
+    return h.news.length ? (
+      <>
+        {h.news.map((p) => (
+          <BlueskyPostCard key={p.uri} post={p} saved={decisions.get(bskyKey(p)) === 'saved'} />
+        ))}
+      </>
+    ) : (
+      <FeedMessage text="No news posts could be loaded." />
+    );
+  }
+  if (sub === 'hn') {
+    return h.hn.length ? (
+      <>
+        {h.hn.map((i) => (
+          <WebCard key={i.id} item={i} />
+        ))}
+      </>
+    ) : (
+      <FeedMessage text="Hacker News could not be loaded." />
+    );
+  }
+  const list = (sub === 'ai' ? h.ai : h.papers).filter((p) => decisions.get(p.id) !== 'down');
+  return list.length ? (
+    <>
+      {list.map((p) => (
+        <FeedPaperCard key={p.id} paper={p} decision={decisions.get(p.id)} />
+      ))}
+    </>
+  ) : (
+    <FeedMessage text={sub === 'papers' ? 'The top papers could not be loaded (OpenAlex budget?).' : 'Nothing here right now.'} />
   );
 }
 

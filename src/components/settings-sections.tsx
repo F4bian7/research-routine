@@ -311,6 +311,7 @@ export function GeminiSection({ settings }: { settings: Settings }) {
 export function BlueskySection({ settings }: { settings: Settings }) {
   const db = useDb();
   const [source, setSource] = useState(settings.blueskySource);
+  const [news, setNews] = useState(settings.newsAccounts);
   const people = useQuery(listPeople) ?? [];
   const handles = people.map((p) => blueskyHandle(p.links.bluesky)).filter((h): h is string => !!h);
   return (
@@ -327,6 +328,15 @@ export function BlueskySection({ settings }: { settings: Settings }) {
         autoCapitalize="none"
         autoCorrect={false}
         placeholder="https://bsky.app/profile/…/lists/…"
+      />
+      <Field
+        label="Science news accounts (Feed → Highlights)"
+        value={news}
+        onChangeText={setNews}
+        onBlur={() => setSetting(db, 'newsAccounts', news.trim())}
+        autoCapitalize="none"
+        autoCorrect={false}
+        placeholder="nature.com, science.org"
       />
       {handles.length > 0 && (
         <Button

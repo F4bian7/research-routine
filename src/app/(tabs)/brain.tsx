@@ -253,7 +253,7 @@ export default function BrainScreen() {
               <Suggestions followedCount={people.length} />
               <Pressable onPress={() => router.push('/person/edit')} hitSlop={8}>
                 <ThemedText type="small" themeColor="textSecondary" style={styles.underline}>
-                  Add someone by hand (for groups or people without papers)
+                  Add someone by hand: groups, or voices without papers (blog, GitHub, Bluesky)
                 </ThemedText>
               </Pressable>
             </>

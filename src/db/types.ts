@@ -14,6 +14,8 @@ export type PersonLinks = {
   bluesky?: string;
   x?: string;
   website?: string;
+  github?: string; // user name; new repositories show up in the timeline
+  blog?: string; // RSS or Atom feed URL; new posts show up in the timeline
 };
 
 // One OpenAlex author profile. OpenAlex often splits a researcher into several
@@ -97,6 +99,7 @@ export type Settings = {
   openalexKey: string | null; // optional; raises the daily OpenAlex budget tenfold
   focusTopicId: number | null; // when set, daily lessons come from this topic only
   packs: string[]; // ids of study packs already added
+  newsAccounts: string; // Bluesky accounts for science news in Highlights
 };
 
 export type Summary = {

@@ -32,7 +32,7 @@ const KIND_FEED: Record<TaskKind, { tab: FeedTab; label: string } | null> = {
   inbox_backlog: { tab: 'new', label: 'Open new papers' },
   backlog: null,
   social: { tab: 'people', label: 'Open people feed' },
-  trending: { tab: 'trending', label: 'Open trending papers' },
+  trending: { tab: 'highlights', label: 'Open highlights' },
   custom: null,
 };
 const KIND_LINKS: Record<TaskKind, string[]> = {

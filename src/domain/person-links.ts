@@ -8,6 +8,7 @@ export function linkFor(kind: keyof PersonLinks, value: string): string {
   const handle = v.replace(/^@/, '');
   if (kind === 'bluesky') return `https://bsky.app/profile/${handle}`;
   if (kind === 'x') return `https://x.com/${handle}`;
+  if (kind === 'github') return `https://github.com/${handle}`;
   return `https://${v}`;
 }
 
@@ -26,7 +27,17 @@ export const LINK_LABEL: Record<keyof PersonLinks, string> = {
   bluesky: 'Bluesky',
   x: 'X',
   website: 'Website',
+  github: 'GitHub',
+  blog: 'Blog feed',
 };
+
+// The GitHub user name, from a name or a profile link.
+export function githubUser(value: string | undefined): string | null {
+  const v = (value ?? '').trim().replace(/^@/, '');
+  if (!v) return null;
+  const m = v.match(/github\.com\/([^/?#]+)/);
+  return m ? m[1] : /^[\w-]+$/.test(v) ? v : null;
+}
 
 // A Google Scholar search when no profile link is stored.
 export function scholarSearchUrl(p: Person) {

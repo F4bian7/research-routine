@@ -55,7 +55,13 @@ function PackCard({ info, added }: { info: PackInfo; added: boolean }) {
       {added || result ? (
         <ThemedText type="small" style={{ color: theme.success }}>
           {result
-            ? `Added: a course of ${result.lessons} lessons (daily lessons now come from it), ${result.papers} papers at the front of your backlog, ${result.people} people followed.`
+            ? `Added: ${[
+                result.lessons ? `a course of ${result.lessons} lessons (daily lessons now come from it)` : '',
+                result.papers ? `${result.papers} papers at the front of your backlog` : '',
+                `${result.people} people followed (see Feed → People)`,
+              ]
+                .filter(Boolean)
+                .join(', ')}.`
             : 'Added ✓'}
         </ThemedText>
       ) : (

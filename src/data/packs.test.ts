@@ -33,7 +33,7 @@ test('importing a pack adds topic, course, papers first, people, focus; twice ch
   const queue = await listQueued(db);
   assert.equal(queue[0].title, pack.papers[0].title); // pack papers come first, in order
   assert.equal(queue[1].title, pack.papers[1].title);
-  assert.equal((await listLessons(db, r.topicId))[0].title, pack.lessons[0].title);
+  assert.equal((await listLessons(db, r.topicId!))[0].title, pack.lessons[0].title);
   assert.equal((await getSettings(db)).focusTopicId, r.topicId);
   // The focused course provides the next lesson (as soon as Gemini can write it).
   assert.equal((await peekLesson(db, true)).topic?.id, r.topicId);
@@ -41,4 +41,26 @@ test('importing a pack adds topic, course, papers first, people, focus; twice ch
   const again = await importPack(db, pack);
   assert.deepEqual([again.lessons, again.papers, again.people], [0, 0, 0]);
   assert.equal((await listPeople(db)).length, 3);
+});
+
+test('a people-only pack follows voices with their links and no topic', async () => {
+  const { importPack } = await import('./packs');
+  const { listPeople } = await import('../db/repos/people');
+  const { getSettings } = await import('../db/repos/settings');
+  const voices = JSON.parse(readFileSync('public/packs/voices-ai.json', 'utf8'));
+  const real = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify({ did: 'did:plc:test' }), { status: 200 })) as typeof fetch;
+  try {
+    const db = await freshDb();
+    const r = await importPack(db, voices);
+    assert.equal(r.topicId, null);
+    assert.equal(r.people, voices.people.length);
+    const karpathy = (await listPeople(db)).find((p) => p.name === 'Andrej Karpathy')!;
+    assert.equal(karpathy.links.github, 'karpathy');
+    assert.equal(karpathy.blueskyDid, 'did:plc:test');
+    assert.equal((await getSettings(db)).focusTopicId, null);
+  } finally {
+    globalThis.fetch = real;
+  }
 });

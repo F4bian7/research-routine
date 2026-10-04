@@ -207,3 +207,13 @@ export async function fetchWorkAuthors(ref: PaperRef): Promise<{ ids: string[]; 
     orcids: (w.authorships ?? []).map((a) => a.author.orcid ?? '').filter(Boolean),
   };
 }
+
+// The most cited papers of the last weeks across all of science: what the whole
+// research world is reading, beyond the user's own topics. A list query, cheap on budget.
+export async function topRecentPapers(fromDate: string, fresh = false): Promise<FeedPaper[]> {
+  const url =
+    `https://api.openalex.org/works?filter=from_publication_date:${fromDate},type:article,has_abstract:true` +
+    `&sort=cited_by_count:desc&per_page=25&select=${SELECT}`;
+  const data = await oaGet<{ results?: Work[] }>(url, { cacheDay: true, fresh });
+  return (data.results ?? []).map((w) => workToFeedPaper(w, null)).filter((p) => p.title);
+}

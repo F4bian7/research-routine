@@ -17,6 +17,7 @@ export const DEFAULT_SETTINGS: Settings = {
   openalexKey: null,
   focusTopicId: null,
   packs: [],
+  newsAccounts: 'nature.com, science.org, newscientist.com',
 };
 
 export const DEFAULT_ROUTINE: DayTask[] = [

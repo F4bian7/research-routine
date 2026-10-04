@@ -1,0 +1,73 @@
+{
+  "id": "voices-ai",
+  "title": "Voices: people worth hearing outside papers",
+  "people": [
+    {
+      "name": "Andrej Karpathy",
+      "why": "Deep learning educator (nanoGPT, Zero to Hero). Posts mostly on X; his notable posts reach the app through Hacker News.",
+      "links": {
+        "bluesky": "karpathy.bsky.social",
+        "github": "karpathy",
+        "blog": "https://karpathy.github.io/feed.xml",
+        "x": "karpathy",
+        "website": "https://karpathy.ai"
+      }
+    },
+    {
+      "name": "Simon Willison",
+      "why": "Daily, careful notes on what is new in LLMs and AI tools.",
+      "links": {
+        "bluesky": "simonwillison.net",
+        "github": "simonw",
+        "blog": "https://simonwillison.net/atom/everything/",
+        "x": "simonw",
+        "website": "https://simonwillison.net"
+      }
+    },
+    {
+      "name": "Eric Topol",
+      "why": "AI in medicine and quick takes on important clinical studies.",
+      "links": {
+        "bluesky": "erictopol.bsky.social",
+        "x": "EricTopol",
+        "website": "https://erictopol.substack.com"
+      }
+    },
+    {
+      "name": "Lilian Weng",
+      "why": "Long, clear deep dives into machine learning topics.",
+      "links": {
+        "blog": "https://lilianweng.github.io/index.xml",
+        "x": "lilianweng",
+        "website": "https://lilianweng.github.io"
+      }
+    },
+    {
+      "name": "Chris Olah",
+      "why": "Visual explanations of how neural networks work (interpretability).",
+      "links": {
+        "blog": "https://colah.github.io/rss.xml",
+        "x": "ch402",
+        "website": "https://colah.github.io"
+      }
+    },
+    {
+      "name": "Yann LeCun",
+      "why": "Deep learning pioneer with strong views on where AI is going.",
+      "links": {
+        "bluesky": "yann-lecun.bsky.social",
+        "x": "ylecun"
+      }
+    },
+    {
+      "name": "Jeremy Howard",
+      "why": "fast.ai: practical deep learning and teaching.",
+      "links": {
+        "blog": "https://www.fast.ai/index.xml",
+        "github": "jph00",
+        "x": "jeremyphoward",
+        "website": "https://www.fast.ai"
+      }
+    }
+  ]
+}

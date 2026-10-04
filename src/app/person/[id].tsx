@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { BlueskyPostCard, bskyKey, FeedMessage, FeedPaperCard } from '@/components/feed-cards';
+import { BlueskyPostCard, bskyKey, FeedMessage, FeedPaperCard, WebCard } from '@/components/feed-cards';
 import { openUrl } from '@/components/link-button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -15,6 +15,7 @@ import {
   needsCheck,
   peopleKey,
   resolvePending,
+  webForPerson,
   worksForPeople,
 } from '@/data/people';
 import { useQuery } from '@/data/use-query';
@@ -28,6 +29,7 @@ import { LINK_LABEL, linkFor, scholarSearchUrl } from '@/domain/person-links';
 import { useTheme } from '@/hooks/use-theme';
 import { followedPosts } from '@/sources/bluesky';
 import type { BlueskyPost, FeedPaper } from '@/sources/feed-types';
+import type { WebItem } from '@/sources/web';
 
 
 type Loaded<T> = { key: string; items: T[] | null }; // items null = failed
@@ -54,13 +56,30 @@ export default function PersonScreen() {
     [id]
   );
   const data = useQuery(load);
-  const [tab, setTab] = useState<'papers' | 'bluesky'>('papers');
+  const [chosenTab, setTab] = useState<'papers' | 'bluesky' | 'web' | null>(null);
+  const [web, setWeb] = useState<Loaded<WebItem> | null>(null);
   const [papers, setPapers] = useState<Loaded<FeedPaper> | null>(null);
   const [posts, setPosts] = useState<Loaded<BlueskyPost> | null>(null);
 
   const person0 = data?.person ?? null;
   const authorKey = person0 && (person0.openalexIds.length || person0.orcid) ? peopleKey([person0]) : null;
   const handle = person0 ? blueskyActor(person0) : null;
+  // People without papers (bloggers, engineers) open on what they do elsewhere.
+  const tab = chosenTab ?? (authorKey ? 'papers' : 'web');
+  const webKey = person0 ? `${person0.id}:${person0.links.github ?? ''}:${person0.links.blog ?? ''}:${person0.openalexIds.length}` : null;
+
+  useEffect(() => {
+    if (!person0 || !webKey || tab !== 'web') return;
+    let alive = true;
+    webForPerson(person0)
+      .then((items) => alive && setWeb({ key: webKey, items }))
+      .catch(() => alive && setWeb({ key: webKey, items: null }));
+    return () => {
+      alive = false;
+    };
+    // Refetch when the person's web sources change, not on other edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [webKey, tab]);
 
   useEffect(() => {
     if (!person0 || !authorKey) return;
@@ -168,6 +187,7 @@ export default function PersonScreen() {
               </View>
             ))}
 
+            {person.openalexIds.length > 0 || person.orcid ? (
             <ThemedText type="small" themeColor="textSecondary">
               {[
                 person.openalexIds.length === 1
@@ -180,6 +200,7 @@ export default function PersonScreen() {
                 .join(', ')}
               .
             </ThemedText>
+            ) : null}
 
             {notes.length > 0 && (
               <View style={styles.notes}>
@@ -197,6 +218,7 @@ export default function PersonScreen() {
             <Row>
               <Chip label="Papers" selected={tab === 'papers'} onPress={() => setTab('papers')} />
               <Chip label="Bluesky" selected={tab === 'bluesky'} onPress={() => setTab('bluesky')} />
+              <Chip label="Web" selected={tab === 'web'} onPress={() => setTab('web')} />
             </Row>
 
             {tab === 'papers' ? (
@@ -212,6 +234,20 @@ export default function PersonScreen() {
                 currentPapers.map((p) => (
                   <FeedPaperCard key={p.id} paper={p} decision={decisions.get(p.id)} />
                 ))
+              )
+            ) : tab === 'web' ? (
+              web?.key !== webKey ? (
+                <FeedMessage text="Loading …" />
+              ) : web.items === null || web.items.length === 0 ? (
+                <FeedMessage
+                  text={
+                    person.links.github || person.links.blog || person.openalexIds.length === 0
+                      ? 'Nothing recent from their blog, GitHub or Hacker News.'
+                      : 'Add a GitHub user or a blog feed (Edit) to see what they publish outside papers.'
+                  }
+                />
+              ) : (
+                web.items.map((i) => <WebCard key={i.id} item={i} />)
               )
             ) : !handle ? (
               <FeedMessage text='No Bluesky handle yet. Tap "Edit" to add one.' />

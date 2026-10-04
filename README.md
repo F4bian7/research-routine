@@ -26,6 +26,8 @@ It ships as an installable web app (PWA) on GitHub Pages:
 | Brain tab: notes (second brain) with [[links]], highlights from the reader, Obsidian export | done |
 | Learn: daily session with a lesson from a per-topic course and spaced-repetition cards; the streak follows it | done |
 | Topic goals, focus topic, study packs (`public/packs/`), OpenAlex key and daily cache | done |
+| Feed → Highlights: most cited new papers in all of science, science news, Hacker News, AI trending | done |
+| Voices: people without papers via blog feeds, GitHub, Bluesky and Hacker News mentions | done |
 | Settings: routine, weekend rule, reminder (calendar or Shortcuts), quick links, JSON backup | done |
 
 ## Install on the iPhone

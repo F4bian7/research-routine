@@ -18,6 +18,7 @@ export async function getSettings(db: Db): Promise<Settings> {
     openalexKey: stored.openalexKey ?? DEFAULT_SETTINGS.openalexKey,
     focusTopicId: stored.focusTopicId ?? DEFAULT_SETTINGS.focusTopicId,
     packs: stored.packs ?? DEFAULT_SETTINGS.packs,
+    newsAccounts: stored.newsAccounts ?? DEFAULT_SETTINGS.newsAccounts,
   };
 }
 

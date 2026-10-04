@@ -5,7 +5,7 @@ import { listTopics } from '@/db/repos/topics';
 import type { AuthorProfile, Person } from '@/db/types';
 import { todayKey } from '@/domain/dates';
 import { matchTopics, nameMatches, normalizeName } from '@/domain/match';
-import { blueskyHandle } from '@/domain/person-links';
+import { blueskyHandle, githubUser } from '@/domain/person-links';
 import {
   type BlueskyActor,
   followedPosts,
@@ -15,6 +15,7 @@ import {
 } from '@/sources/bluesky';
 import type { BlueskyPost, FeedPaper } from '@/sources/feed-types';
 import { parsePaperLink } from '@/sources/links';
+import { fetchFeed, githubRepos, hnMentions, type WebItem } from '@/sources/web';
 import {
   authorsOfDois,
   type CoAuthor,
@@ -202,7 +203,22 @@ export async function suggestPeople(db: Db): Promise<Suggestion[]> {
 
 export type TimelineItem =
   | { kind: 'paper'; at: string; person: Person; paper: FeedPaper }
-  | { kind: 'post'; at: string; person: Person; post: BlueskyPost };
+  | { kind: 'post'; at: string; person: Person; post: BlueskyPost }
+  | { kind: 'web'; at: string; person: Person; item: WebItem };
+
+// Blog posts, new GitHub repositories, and, for people without papers (bloggers,
+// engineers, public voices), Hacker News stories about them.
+export async function webForPerson(p: Person): Promise<WebItem[]> {
+  const gh = githubUser(p.links.github);
+  const jobs: Promise<WebItem[]>[] = [];
+  if (p.links.blog) jobs.push(fetchFeed(p.links.blog));
+  if (gh) jobs.push(githubRepos(gh));
+  if (p.openalexIds.length === 0) jobs.push(hnMentions(p.name));
+  const results = await Promise.allSettled(jobs);
+  return results
+    .flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
+    .sort((a, b) => b.at.localeCompare(a.at));
+}
 
 export type Timeline = { items: TimelineItem[]; avatars: Map<string, string> };
 
@@ -210,7 +226,10 @@ let cache: { key: string; value: Promise<Timeline> } | null = null;
 
 export function peopleKey(people: Person[]) {
   return people
-    .map((p) => `${p.id}:${p.openalexIds.join('+')}:${p.orcid}:${p.blueskyDid ?? p.links.bluesky ?? ''}`)
+    .map(
+      (p) =>
+        `${p.id}:${p.openalexIds.join('+')}:${p.orcid}:${p.blueskyDid ?? p.links.bluesky ?? ''}:${p.links.github ?? ''}:${p.links.blog ?? ''}`
+    )
     .join('|');
 }
 
@@ -237,7 +256,7 @@ async function buildTimeline(people: Person[], fresh: boolean): Promise<Timeline
     .map((p) => ({ p, actor: blueskyActor(p) }))
     .filter((x): x is { p: Person; actor: string } => !!x.actor);
 
-  const [papers, postLists, profiles] = await Promise.all([
+  const [papers, postLists, profiles, webLists] = await Promise.all([
     worksForPeople(people, 50, fresh).catch(() => [] as FeedPaper[]),
     Promise.all(
       withBsky.map(({ p, actor }) =>
@@ -247,6 +266,7 @@ async function buildTimeline(people: Person[], fresh: boolean): Promise<Timeline
       )
     ),
     getProfiles(withBsky.map((x) => x.actor)).catch(() => new Map<string, BlueskyActor>()),
+    Promise.all(people.map((p) => webForPerson(p).then((items) => items.slice(0, 8).map((item) => ({ p, item }))))),
   ]);
 
   const items: TimelineItem[] = [];
@@ -262,6 +282,7 @@ async function buildTimeline(people: Person[], fresh: boolean): Promise<Timeline
     const own = p.blueskyDid ? post.did === p.blueskyDid : post.handle === blueskyHandle(p.links.bluesky);
     if (own) items.push({ kind: 'post', at: post.createdAt, person: p, post });
   }
+  for (const { p, item } of webLists.flat()) items.push({ kind: 'web', at: item.at, person: p, item });
   items.sort((a, b) => b.at.localeCompare(a.at));
 
   const avatars = new Map<string, string>();

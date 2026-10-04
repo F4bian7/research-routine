@@ -11,7 +11,8 @@ import type { BlueskyPost, FeedPaper } from '@/sources/feed-types';
 import { fetchTrending } from '@/sources/huggingface';
 import { canonicalUrl, parsePaperLink } from '@/sources/links';
 import { fetchMeta } from '@/sources/meta';
-import { searchRecent } from '@/sources/openalex';
+import { searchRecent, topRecentPapers } from '@/sources/openalex';
+import { hnTop, type WebItem } from '@/sources/web';
 
 // Runs async jobs with at most `limit` in flight, to stay polite to free APIs.
 async function pool<T>(jobs: (() => Promise<T>)[], limit: number) {
@@ -153,4 +154,32 @@ export async function paperFromPost(post: BlueskyPost): Promise<FeedPaper | null
     venue: meta?.venue ?? '',
     topicId: null,
   };
+}
+
+export type Highlights = {
+  papers: FeedPaper[]; // most cited new papers, all fields
+  news: BlueskyPost[]; // science news accounts
+  hn: WebItem[]; // most discussed on Hacker News
+  ai: FeedPaper[]; // Hugging Face trending
+};
+
+// Big things outside the user's topics. Each part may fail on its own.
+export function loadHighlights(newsAccounts: string, refresh = false): Promise<Highlights> {
+  return cached(
+    `highlights:${todayKey()}:${newsAccounts}`,
+    async () => {
+      const [papers, news, hn, ai] = await Promise.allSettled([
+        topRecentPapers(addDays(todayKey(), -30), refresh),
+        followedPosts(newsAccounts),
+        hnTop(7, 400),
+        fetchTrending(),
+      ]);
+      const value = <T,>(r: PromiseSettledResult<T[]>) => (r.status === 'fulfilled' ? r.value : []);
+      if ([papers, news, hn, ai].every((r) => r.status === 'rejected')) {
+        throw (papers as PromiseRejectedResult).reason;
+      }
+      return { papers: value(papers), news: value(news).slice(0, 30), hn: value(hn), ai: value(ai) };
+    },
+    refresh
+  );
 }

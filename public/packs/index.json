@@ -3,5 +3,10 @@
     "id": "cardiac-mra-thesis",
     "title": "Thesis prep: self-navigated, motion-corrected cardiac MRA (SHARED)",
     "description": "A course from MR basics to motion-corrected whole-heart reconstruction, the key papers in reading order, and the people behind them."
+  },
+  {
+    "id": "voices-ai",
+    "title": "Voices: people worth hearing outside papers",
+    "description": "Andrej Karpathy, Simon Willison, Eric Topol, Lilian Weng, Chris Olah, Yann LeCun and fast.ai: their blogs, GitHub projects, Bluesky posts and what Hacker News discusses about them."
   }
 ]
