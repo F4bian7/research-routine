@@ -197,3 +197,16 @@ export async function authorsOfDois(dois: string[]): Promise<CoAuthor[]> {
   }
   return [...byId.values()].sort((x, y) => y.count - x.count);
 }
+
+// Author ids and ORCIDs of one paper, to link notes to the people who wrote it.
+export async function fetchWorkAuthors(ref: PaperRef): Promise<{ ids: string[]; orcids: string[] }> {
+  const doi = ref.kind === 'arxiv' ? `10.48550/arXiv.${ref.id}` : ref.kind === 'doi' ? ref.doi : null;
+  if (!doi) return { ids: [], orcids: [] };
+  const res = await fetch(`https://api.openalex.org/works/doi:${encodeURI(doi)}?select=authorships`);
+  if (!res.ok) return { ids: [], orcids: [] };
+  const w = (await res.json()) as Work;
+  return {
+    ids: (w.authorships ?? []).map((a) => shortId(a.author.id ?? '')).filter(Boolean),
+    orcids: (w.authorships ?? []).map((a) => a.author.orcid ?? '').filter(Boolean),
+  };
+}

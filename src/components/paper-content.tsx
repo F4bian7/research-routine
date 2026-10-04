@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { PaperCards } from '@/components/paper-extras';
 import { SummarySection } from '@/components/summary-section';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
@@ -21,6 +22,7 @@ export function PaperContent({ paper }: { paper: Paper }) {
   return (
     <View style={styles.box}>
       {abstract ? <SummarySection paper={paper} text={abstract} abstract={abstract} /> : null}
+      {abstract ? <PaperCards paper={paper} text={abstract} /> : null}
       <ThemedText type="smallBold">Abstract</ThemedText>
       <ThemedText>{abstract === null ? 'Loading …' : abstract || 'No abstract found.'}</ThemedText>
     </View>

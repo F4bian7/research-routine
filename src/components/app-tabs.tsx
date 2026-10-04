@@ -33,12 +33,9 @@ export default function AppTabs() {
         />
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="people">
-        <NativeTabs.Trigger.Label>Topics</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          sf={{ default: 'person.2', selected: 'person.2.fill' }}
-          md="group"
-        />
+      <NativeTabs.Trigger name="brain">
+        <NativeTabs.Trigger.Label>Brain</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'brain', selected: 'brain.fill' }} md="psychology" />
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="settings">

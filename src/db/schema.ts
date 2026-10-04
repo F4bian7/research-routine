@@ -111,6 +111,60 @@ const MIGRATIONS: string[] = [
   ALTER TABLE people ADD COLUMN checked_at TEXT;
   UPDATE people SET openalex_ids = '["' || openalex_id || '"]' WHERE openalex_id IS NOT NULL;
   `,
+  // Second brain and Learn. From here on "completions" are Learn sessions (they
+  // carry the streak); the routine task of the day is ticked in routine_done.
+  `
+  CREATE TABLE notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL DEFAULT '',
+    quote TEXT NOT NULL DEFAULT '',
+    paper_id INTEGER REFERENCES papers(id) ON DELETE SET NULL,
+    topic_ids TEXT NOT NULL DEFAULT '[]',
+    person_ids TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE TABLE lessons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic_id INTEGER REFERENCES topics(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    outline TEXT NOT NULL DEFAULT '',
+    content TEXT,
+    status TEXT NOT NULL DEFAULT 'planned',
+    done_at TEXT
+  );
+  CREATE TABLE cards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    front TEXT NOT NULL,
+    back TEXT NOT NULL,
+    source TEXT NOT NULL,
+    note_id INTEGER REFERENCES notes(id) ON DELETE CASCADE,
+    paper_id INTEGER REFERENCES papers(id) ON DELETE CASCADE,
+    lesson_id INTEGER REFERENCES lessons(id) ON DELETE SET NULL,
+    topic_id INTEGER REFERENCES topics(id) ON DELETE SET NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    due TEXT,
+    interval_days REAL NOT NULL DEFAULT 0,
+    ease REAL NOT NULL DEFAULT 2.5,
+    reps INTEGER NOT NULL DEFAULT 0,
+    lapses INTEGER NOT NULL DEFAULT 0,
+    last_review TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX cards_due ON cards(status, due);
+  CREATE TABLE learn_log (
+    date TEXT PRIMARY KEY,
+    xp INTEGER NOT NULL DEFAULT 0,
+    reviewed INTEGER NOT NULL DEFAULT 0,
+    lesson_id INTEGER
+  );
+  CREATE TABLE routine_done (
+    date TEXT PRIMARY KEY
+  );
+  INSERT INTO routine_done (date) SELECT date FROM completions;
+  `,
 ];
 
 export async function migrateAndSeed(db: Db) {

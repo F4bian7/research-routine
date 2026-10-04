@@ -27,7 +27,7 @@ const LINK_HINT: Record<keyof PersonLinks, string> = {
 
 function goBack() {
   if (router.canGoBack()) router.back();
-  else router.replace('/people');
+  else router.replace({ pathname: '/brain', params: { view: 'people' } });
 }
 
 function Form({ person, topics }: { person: Person | null; topics: { id: number; name: string; color: string }[] }) {
@@ -140,7 +140,7 @@ function Form({ person, topics }: { person: Person | null; topics: { id: number;
             onPress={async () => {
               if (!confirmDelete) return setConfirmDelete(true);
               await deletePerson(db, person.id);
-              router.replace('/people');
+              router.replace({ pathname: '/brain', params: { view: 'people' } });
             }}
           />
         ) : null}

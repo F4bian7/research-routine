@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { openUrl } from '@/components/link-button';
 import { paperMeta } from '@/components/paper-card';
 import { PaperContent } from '@/components/paper-content';
+import { PaperNotes } from '@/components/paper-extras';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button, Chip, Field, Row } from '@/components/ui';
@@ -91,8 +92,10 @@ export default function ReaderScreen() {
 
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
+            <PaperNotes paper={paper} />
+
             <Field
-              label="Note"
+              label="Quick note (shown in the archive)"
               multiline
               value={note ?? paper.note}
               onChangeText={setNote}

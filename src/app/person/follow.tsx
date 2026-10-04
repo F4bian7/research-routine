@@ -17,7 +17,7 @@ import { searchAuthors } from '@/sources/openalex';
 
 function goBack() {
   if (router.canGoBack()) router.back();
-  else router.replace('/people');
+  else router.replace({ pathname: '/brain', params: { view: 'people' } });
 }
 
 // Follow someone: search the name, tick every profile that is this person (OpenAlex

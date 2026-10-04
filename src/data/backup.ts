@@ -7,12 +7,18 @@ import { notifyChange } from './changes';
 export const BACKUP_APP = 'research-routine';
 export const BACKUP_VERSION = 1;
 
+// In dependency order: a table comes after the tables it references.
 const TABLES = [
   'topics',
   'people',
   'papers',
+  'notes',
+  'lessons',
+  'cards',
   'day_tasks',
   'completions',
+  'routine_done',
+  'learn_log',
   'settings',
   'summaries',
   'feed_seen',
@@ -50,6 +56,7 @@ function validate(data: unknown): Backup {
   for (const t of TABLES) {
     const rows = (b.tables as Record<string, unknown>)[t];
     if (rows !== undefined && !Array.isArray(rows)) throw new BackupError(`Table ${t} is broken.`);
+    // Older backups lack newer tables; those are simply restored empty.
   }
   return b as Backup;
 }

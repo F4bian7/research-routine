@@ -55,24 +55,22 @@ function parseSummary(text: string): Summary {
   };
 }
 
-export async function summarize(
-  apiKey: string,
-  model: string,
-  paper: { title: string; text: string }
-): Promise<Summary> {
+// One JSON request to Gemini; `parse` turns the text into the wanted shape.
+export async function generateJson<T>(
+  gemini: { apiKey: string; model: string },
+  instruction: string,
+  input: string,
+  parse: (text: string) => T,
+  temperature = 0.3
+): Promise<T> {
   const body = {
-    systemInstruction: { parts: [{ text: INSTRUCTION }] },
-    contents: [
-      {
-        role: 'user',
-        parts: [{ text: `Title: ${paper.title}\n\n${paper.text.slice(0, MAX_CHARS)}` }],
-      },
-    ],
-    generationConfig: { responseMimeType: 'application/json', temperature: 0.3 },
+    systemInstruction: { parts: [{ text: instruction }] },
+    contents: [{ role: 'user', parts: [{ text: input.slice(0, MAX_CHARS) }] }],
+    generationConfig: { responseMimeType: 'application/json', temperature },
   };
-  const res = await fetch(`${ENDPOINT}/${encodeURIComponent(model)}:generateContent`, {
+  const res = await fetch(`${ENDPOINT}/${encodeURIComponent(gemini.model)}:generateContent`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': gemini.apiKey },
     body: JSON.stringify(body),
   });
   const data = (await res.json().catch(() => ({}))) as GenerateResponse;
@@ -82,10 +80,18 @@ export async function summarize(
   const text = (data.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join('');
   if (!text) throw new GeminiError('Empty answer from Gemini.');
   try {
-    return parseSummary(text);
+    return parse(text.replace(/^```(?:json)?\s*|\s*```$/g, ''));
   } catch {
     throw new GeminiError('Gemini did not return valid JSON.');
   }
+}
+
+export async function summarize(
+  apiKey: string,
+  model: string,
+  paper: { title: string; text: string }
+): Promise<Summary> {
+  return generateJson({ apiKey, model }, INSTRUCTION, `Title: ${paper.title}\n\n${paper.text}`, parseSummary);
 }
 
 // Cheap check that key and model work: fetches the model description, no generation.

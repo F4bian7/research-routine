@@ -1,8 +1,10 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { CardsView } from '@/components/brain-cards';
+import { NotesView } from '@/components/brain-notes';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button, Chip, Field, Row } from '@/components/ui';
@@ -135,10 +137,22 @@ async function load(db: Db) {
   return { topics, people };
 }
 
-export default function TopicsScreen() {
+type BrainView = 'notes' | 'cards' | 'topics' | 'people';
+
+const HEADLINE: Record<BrainView, string> = {
+  notes: 'Notes',
+  cards: 'Cards',
+  topics: 'Topics',
+  people: 'People',
+};
+
+export default function BrainScreen() {
   const db = useDb();
   const data = useQuery(load);
-  const [view, setView] = useState<'topics' | 'people'>('topics');
+  const params = useLocalSearchParams<{ view?: BrainView }>();
+  // The view lives in the route, so other screens can open a specific part.
+  const view: BrainView = params.view ?? 'notes';
+  const setView = (v: BrainView) => router.setParams({ view: v });
   const [topicFilter, setTopicFilter] = useState<number | null>(null);
   if (!data) return <ThemedView style={styles.container} />;
   const { topics, people } = data;
@@ -149,8 +163,12 @@ export default function TopicsScreen() {
       <SafeAreaView edges={['top']} style={styles.container}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
-            <ThemedText style={styles.headline}>{view === 'topics' ? 'Topics' : 'People'}</ThemedText>
-            {view === 'topics' ? (
+            <ThemedText style={styles.headline}>{HEADLINE[view]}</ThemedText>
+            {view === 'notes' ? (
+              <Button label="+ Note" variant="primary" onPress={() => router.push('/note/edit')} />
+            ) : view === 'cards' ? (
+              <Button label="+ Card" variant="primary" onPress={() => router.push('/card/edit')} />
+            ) : view === 'topics' ? (
               <Button
                 label="+ Topic"
                 variant="primary"
@@ -168,11 +186,17 @@ export default function TopicsScreen() {
           </View>
 
           <Row>
+            <Chip label="Notes" selected={view === 'notes'} onPress={() => setView('notes')} />
+            <Chip label="Cards" selected={view === 'cards'} onPress={() => setView('cards')} />
             <Chip label="Topics" selected={view === 'topics'} onPress={() => setView('topics')} />
             <Chip label={`People (${people.length})`} selected={view === 'people'} onPress={() => setView('people')} />
           </Row>
 
-          {view === 'topics' ? (
+          {view === 'notes' ? (
+            <NotesView topics={topics} />
+          ) : view === 'cards' ? (
+            <CardsView topics={topics} />
+          ) : view === 'topics' ? (
             <>
               <ThemedText type="small" themeColor="textSecondary">
                 Keywords drive the New and Bluesky feeds. Words in one keyword must all appear, so

@@ -1,7 +1,7 @@
 // Saving and picking files in the browser. On the iPhone, sharing a file opens the
 // share sheet ("Save to Files", AirDrop, Mail); a download link is the fallback.
-export async function saveFile(name: string, type: string, text: string): Promise<void> {
-  const file = new File([text], name, { type });
+export async function saveFile(name: string, type: string, data: string | Uint8Array): Promise<void> {
+  const file = new File([data as BlobPart], name, { type });
   if (navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ files: [file] });

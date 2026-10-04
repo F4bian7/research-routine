@@ -2,50 +2,8 @@
 // Run with: npm test
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import initSqlJs, { type Database } from 'sql.js';
 
-import type { Db, SQLValue } from '../db/db';
-
-// In-memory Db over sql.js, the same engine the web build uses.
-function memoryDb(db: Database): Db {
-  const query = <T>(sql: string, params: SQLValue[]) => {
-    const stmt = db.prepare(sql);
-    stmt.bind(params);
-    const rows: T[] = [];
-    while (stmt.step()) rows.push(stmt.getAsObject() as T);
-    stmt.free();
-    return rows;
-  };
-  const self: Db = {
-    execAsync: async (sql) => void db.exec(sql),
-    runAsync: async (sql, ...params) => {
-      db.run(sql, params);
-      const id = query<{ id: number }>('SELECT last_insert_rowid() AS id', [])[0].id;
-      return { lastInsertRowId: id, changes: db.getRowsModified() };
-    },
-    getFirstAsync: async <T,>(sql: string, ...params: SQLValue[]) => query<T>(sql, params)[0] ?? null,
-    getAllAsync: async <T,>(sql: string, ...params: SQLValue[]) => query<T>(sql, params),
-    withExclusiveTransactionAsync: async (task) => {
-      db.exec('BEGIN');
-      try {
-        await task(self);
-        db.exec('COMMIT');
-      } catch (e) {
-        db.exec('ROLLBACK');
-        throw e;
-      }
-    },
-  };
-  return self;
-}
-
-async function freshDb() {
-  const SQL = await initSqlJs();
-  const db = memoryDb(new SQL.Database());
-  const { migrateAndSeed } = await import('../db/schema');
-  await migrateAndSeed(db);
-  return db;
-}
+import { freshDb } from '../test/memory-db';
 
 test('export then import restores every table, without the API key', async () => {
   const { exportBackup, importBackup } = await import('./backup');
@@ -64,6 +22,15 @@ test('export then import restores every table, without the API key', async () =>
   await setSetting(a, 'geminiApiKey', 'SECRET');
   await saveSummary(a, id, { short: 's', problem: '', method: '', result: '', relevance: '', limits: '', terms: [] }, 'm');
   await setFeedDecision(a, 'arxiv:1', 'down');
+  const { addNote } = await import('../db/repos/notes');
+  const { addCards } = await import('../db/repos/cards');
+  const { addSyllabus } = await import('../db/repos/lessons');
+  const { logLearning, setRoutineDone } = await import('../db/repos/learn');
+  const noteId = await addNote(a, { title: 'Idea', body: 'see [[Other]]', quote: 'q', paperId: id, topicIds: [1], personIds: [] });
+  await addSyllabus(a, 1, [{ title: 'L1', outline: 'o' }]);
+  await addCards(a, [{ front: 'F', back: 'B', source: 'note', status: 'active', noteId, topicId: 1 }]);
+  await logLearning(a, '2026-10-03', 12, 3, null);
+  await setRoutineDone(a, '2026-10-03', true);
 
   const backup = await exportBackup(a);
   const text = JSON.stringify(backup);

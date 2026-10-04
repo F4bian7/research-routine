@@ -1,0 +1,212 @@
+import { router } from 'expo-router';
+import { useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
+
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import { Button, Row } from '@/components/ui';
+import { Spacing } from '@/constants/theme';
+import { getGemini } from '@/data/learn';
+import { useQuery } from '@/data/use-query';
+import { type Db, useDb } from '@/db/db';
+import { cardCounts, deleteCard, listCards, updateCard } from '@/db/repos/cards';
+import { addSyllabus, deleteSyllabus, listLessons } from '@/db/repos/lessons';
+import { getSettings } from '@/db/repos/settings';
+import type { Card, Topic } from '@/db/types';
+import { todayKey } from '@/domain/dates';
+import { intervalLabel } from '@/domain/srs';
+import { useTheme } from '@/hooks/use-theme';
+import { explainError } from '@/sources/gemini';
+import { makeSyllabus } from '@/sources/learning';
+
+async function load(db: Db) {
+  const [counts, suggested, active, lessons, settings] = await Promise.all([
+    cardCounts(db, todayKey()),
+    listCards(db, 'suggested'),
+    listCards(db, 'active'),
+    listLessons(db),
+    getSettings(db),
+  ]);
+  return { counts, suggested, active, lessons, hasKey: !!settings.geminiApiKey };
+}
+
+function SuggestedCard({ card }: { card: Card }) {
+  const db = useDb();
+  const theme = useTheme();
+  return (
+    <View style={[styles.card, { borderColor: theme.border }]}>
+      <ThemedText style={styles.bold}>{card.front}</ThemedText>
+      <ThemedText themeColor="textSecondary">{card.back}</ThemedText>
+      <Row>
+        <Button label="Keep" variant="primary" onPress={() => updateCard(db, card.id, { status: 'active' })} />
+        <Button
+          label="Edit"
+          onPress={() => router.push({ pathname: '/card/edit', params: { id: String(card.id) } })}
+        />
+        <Button label="Discard" variant="ghost" onPress={() => deleteCard(db, card.id)} />
+      </Row>
+    </View>
+  );
+}
+
+export function CardsView({ topics }: { topics: Topic[] }) {
+  const db = useDb();
+  const theme = useTheme();
+  const data = useQuery(load);
+  const [busy, setBusy] = useState<number | null>(null);
+  const [status, setStatus] = useState('');
+  const [showAll, setShowAll] = useState(false);
+  if (!data) return null;
+  const { counts, suggested, active, lessons, hasKey } = data;
+
+  async function createCourse(t: Topic) {
+    const g = await getGemini(db);
+    if (!g) return;
+    setBusy(t.id);
+    setStatus('');
+    try {
+      await addSyllabus(db, t.id, await makeSyllabus(g, t));
+    } catch (e) {
+      setStatus(explainError(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <View style={styles.box}>
+      <ThemedView type="backgroundElement" style={styles.stats}>
+        {[
+          ['Due today', counts.due],
+          ['New', counts.fresh],
+          ['In review', counts.active],
+        ].map(([label, n]) => (
+          <View key={label} style={styles.stat}>
+            <ThemedText style={styles.statNumber}>{n}</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              {label}
+            </ThemedText>
+          </View>
+        ))}
+      </ThemedView>
+      <Button label="Start a session" variant="primary" onPress={() => router.push('/learn')} />
+
+      {suggested.length > 0 && (
+        <>
+          <ThemedText type="smallBold">Suggested cards ({suggested.length})</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            Drafted by Gemini from your papers and notes. Keep the ones worth remembering.
+          </ThemedText>
+          {suggested.map((c) => (
+            <SuggestedCard key={c.id} card={c} />
+          ))}
+        </>
+      )}
+
+      <ThemedText type="smallBold">Courses</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">
+        Each topic gets a course of short lessons, from the basics to current research. One
+        lesson comes in every daily session; topics take turns.
+      </ThemedText>
+      {topics.map((t) => {
+        const own = lessons.filter((l) => l.topicId === t.id);
+        const done = own.filter((l) => l.status === 'done');
+        const next = own.find((l) => l.status === 'planned');
+        return (
+          <View key={t.id} style={[styles.card, { borderColor: theme.border }]}>
+            <View style={styles.topRow}>
+              <View style={[styles.dot, { backgroundColor: t.color }]} />
+              <ThemedText style={[styles.bold, styles.flex]}>{t.name}</ThemedText>
+              {own.length > 0 && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  {done.length}/{own.length}
+                </ThemedText>
+              )}
+            </View>
+            {own.length === 0 ? (
+              hasKey ? (
+                <Button
+                  label={busy === t.id ? 'Planning the course …' : 'Plan the course now'}
+                  disabled={busy !== null}
+                  onPress={() => createCourse(t)}
+                />
+              ) : (
+                <ThemedText type="small" themeColor="textSecondary">
+                  Courses are written by Gemini. Add the free key in Settings.
+                </ThemedText>
+              )
+            ) : (
+              <>
+                {next ? (
+                  <ThemedText type="small" themeColor="textSecondary">
+                    Next: {next.title}
+                  </ThemedText>
+                ) : (
+                  <ThemedText type="small">Course finished.</ThemedText>
+                )}
+                {done.map((l) => (
+                  <Pressable
+                    key={l.id}
+                    onPress={() => router.push({ pathname: '/lesson/[id]', params: { id: String(l.id) } })}
+                    hitSlop={4}>
+                    <ThemedText type="small" style={{ color: theme.accent }}>
+                      ✓ {l.title}
+                    </ThemedText>
+                  </Pressable>
+                ))}
+                {done.length === 0 && (
+                  <Pressable onPress={() => deleteSyllabus(db, t.id)} hitSlop={4}>
+                    <ThemedText type="small" themeColor="textSecondary" style={styles.underline}>
+                      Plan this course again
+                    </ThemedText>
+                  </Pressable>
+                )}
+              </>
+            )}
+          </View>
+        );
+      })}
+      {status ? <ThemedText type="small">{status}</ThemedText> : null}
+
+      <Pressable onPress={() => setShowAll(!showAll)} hitSlop={8}>
+        <ThemedText type="smallBold" themeColor="textSecondary">
+          {showAll ? '▾' : '▸'} All cards in review ({active.length})
+        </ThemedText>
+      </Pressable>
+      {showAll &&
+        active.map((c) => (
+          <Pressable
+            key={c.id}
+            onPress={() => router.push({ pathname: '/card/edit', params: { id: String(c.id) } })}
+            style={[styles.row, { borderBottomColor: theme.border }]}>
+            <ThemedText style={styles.flex} numberOfLines={2}>
+              {c.front}
+            </ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              {c.due ? `${c.due.slice(5)} · ${intervalLabel(Math.max(1, Math.round(c.intervalDays)))}` : 'new'}
+            </ThemedText>
+          </Pressable>
+        ))}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  box: { gap: Spacing.three },
+  stats: { flexDirection: 'row', borderRadius: Spacing.three, padding: Spacing.three },
+  stat: { flex: 1, alignItems: 'center' },
+  statNumber: { fontSize: 28, lineHeight: 34, fontWeight: 700 },
+  card: { borderWidth: 1, borderRadius: Spacing.three, padding: Spacing.three, gap: Spacing.two },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  dot: { width: 10, height: 10, borderRadius: 5 },
+  flex: { flex: 1 },
+  bold: { fontWeight: 700 },
+  underline: { textDecorationLine: 'underline' },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    minHeight: 44,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+});

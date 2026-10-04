@@ -118,7 +118,7 @@ export function RoutineSection({ routine, settings }: { routine: DayTask[]; sett
   const db = useDb();
   return (
     <Section title="Routine">
-      <Hint>One task per weekday. Switch a day off to make it a rest day; it never breaks the streak.</Hint>
+      <Hint>One task per weekday, a bonus next to the daily Learn session (the session keeps the streak). Switch a day off to make it a rest day; then a missed session does not break the streak.</Hint>
       {WEEK_ORDER.map((wd) => routine.find((t) => t.weekday === wd))
         .filter((t): t is DayTask => !!t)
         .map((t) => (

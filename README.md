@@ -23,8 +23,8 @@ It ships as an installable web app (PWA) on GitHub Pages:
 | Topics tab: names, colours, feed keywords | done |
 | People: links, newest papers (OpenAlex) and Bluesky posts per person | done |
 | Follow in two taps, suggestions from the backlog, people timeline in the feed | done |
-| Notes (second brain) | next |
-| Learn: daily lesson and spaced repetition | open |
+| Brain tab: notes (second brain) with [[links]], highlights from the reader, Obsidian export | done |
+| Learn: daily session with a lesson from a per-topic course and spaced-repetition cards; the streak follows it | done |
 | Settings: routine, weekend rule, reminder (calendar or Shortcuts), quick links, JSON backup | done |
 
 ## Install on the iPhone
@@ -65,7 +65,8 @@ npm run build:web       # production web build into dist/
 - `src/components/` UI pieces (`app-tabs.web.tsx` is the web tab bar)
 - `src/db/` schema and migrations, seed data, one repo per entity (no React), `Db` interface
   with a native (expo-sqlite) and a web (sql.js + IndexedDB) backend
-- `src/domain/` pure logic: local-time date keys, streak rule
+- `src/domain/` pure logic: local-time date keys, streak rule, spaced repetition (SM-2),
+  [[wiki links]], a small ZIP writer
 - `src/sources/` paper lookup: link parsing, OpenAlex metadata, arXiv HTML full text
   (cached with the Cache API, not in SQLite)
 - `src/data/` `useQuery` hook and change notification between repos and screens

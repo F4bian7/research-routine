@@ -104,3 +104,62 @@ export type Summary = {
   limits: string;
   terms: { term: string; explanation: string }[];
 };
+
+export type Note = {
+  id: number;
+  title: string;
+  body: string; // may contain [[Other note title]] links
+  quote: string; // highlighted passage from a paper, if any
+  paperId: number | null;
+  topicIds: number[];
+  personIds: number[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CardSource = 'lesson' | 'paper' | 'note' | 'manual';
+export type CardStatus = 'suggested' | 'active' | 'suspended';
+
+export type Card = {
+  id: number;
+  front: string;
+  back: string;
+  source: CardSource;
+  noteId: number | null;
+  paperId: number | null;
+  lessonId: number | null;
+  topicId: number | null;
+  status: CardStatus;
+  due: string | null; // YYYY-MM-DD; null = new, never reviewed
+  intervalDays: number;
+  ease: number;
+  reps: number;
+  lapses: number;
+  lastReview: string | null;
+  createdAt: string;
+};
+
+export type Quiz = {
+  question: string;
+  options: string[];
+  answer: number; // index into options
+  explanation: string;
+};
+
+export type LessonContent = {
+  body: string; // short paragraphs separated by blank lines
+  keyPoints: string[];
+  quiz: Quiz;
+  cards: { front: string; back: string }[];
+};
+
+export type Lesson = {
+  id: number;
+  topicId: number | null;
+  position: number;
+  title: string;
+  outline: string;
+  content: LessonContent | null;
+  status: 'planned' | 'done';
+  doneAt: string | null;
+};

@@ -20,6 +20,7 @@ import {
 import { useQuery } from '@/data/use-query';
 import { type Db, useDb } from '@/db/db';
 import { getFeedDecisions } from '@/db/repos/feed';
+import { listNotes } from '@/db/repos/notes';
 import { getPerson } from '@/db/repos/people';
 import { listTopics } from '@/db/repos/topics';
 import type { PersonLinks } from '@/db/types';
@@ -33,7 +34,7 @@ type Loaded<T> = { key: string; items: T[] | null }; // items null = failed
 
 function goBack() {
   if (router.canGoBack()) router.back();
-  else router.replace('/people');
+  else router.replace({ pathname: '/brain', params: { view: 'people' } });
 }
 
 export default function PersonScreen() {
@@ -42,12 +43,13 @@ export default function PersonScreen() {
   const db = useDb();
   const load = useCallback(
     async (d: Db) => {
-      const [person, topics, decisions] = await Promise.all([
+      const [person, topics, decisions, notes] = await Promise.all([
         getPerson(d, Number(id)),
         listTopics(d),
         getFeedDecisions(d),
+        listNotes(d),
       ]);
-      return { person, topics, decisions };
+      return { person, topics, decisions, notes: notes.filter((n) => n.personIds.includes(Number(id))) };
     },
     [id]
   );
@@ -92,7 +94,7 @@ export default function PersonScreen() {
   }, [handle, tab]);
 
   if (!data) return <ThemedView style={styles.container} />;
-  const { person, topics, decisions } = data;
+  const { person, topics, decisions, notes } = data;
 
   const linkKinds = (Object.keys(LINK_LABEL) as (keyof PersonLinks)[]).filter((k) => person?.links[k]);
   const currentPapers = papers?.key === authorKey ? papers.items : undefined;
@@ -179,6 +181,19 @@ export default function PersonScreen() {
               .
             </ThemedText>
 
+            {notes.length > 0 && (
+              <View style={styles.notes}>
+                <ThemedText type="smallBold">Your notes ({notes.length})</ThemedText>
+                {notes.map((n) => (
+                  <Pressable
+                    key={n.id}
+                    onPress={() => router.push({ pathname: '/note/[id]', params: { id: String(n.id) } })}>
+                    <ThemedText style={{ color: theme.accent }}>{n.title}</ThemedText>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+
             <Row>
               <Chip label="Papers" selected={tab === 'papers'} onPress={() => setTab('papers')} />
               <Chip label="Bluesky" selected={tab === 'bluesky'} onPress={() => setTab('bluesky')} />
@@ -238,5 +253,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, lineHeight: 34, fontWeight: 700 },
   topic: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
   swatch: { width: 10, height: 10, borderRadius: 5 },
+  notes: { gap: Spacing.one },
   pending: { borderWidth: 1.5, borderRadius: Spacing.three, padding: Spacing.three, gap: Spacing.two },
 });

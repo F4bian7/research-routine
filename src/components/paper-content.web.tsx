@@ -1,9 +1,11 @@
+import { router } from 'expo-router';
 import { type MouseEvent, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { PaperCards } from '@/components/paper-extras';
 import { SummarySection } from '@/components/summary-section';
 import { ThemedText } from '@/components/themed-text';
-import { Chip, Row } from '@/components/ui';
+import { Button, Chip, Row } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import type { Paper } from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
@@ -122,8 +124,37 @@ function Html({ html }: { html: string }) {
   return <div className="rr-reader" onClick={onAnchorClick} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
+// Marking text in the reader offers "Save highlight". iOS clears the selection as soon
+// as a button is touched, so the bar stays a moment after the selection is gone.
+function useReaderSelection() {
+  const [text, setText] = useState('');
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onChange = () => {
+      const sel = window.getSelection();
+      const value = sel?.toString().trim() ?? '';
+      const node = sel?.anchorNode ?? null;
+      const el = node instanceof Element ? node : (node?.parentElement ?? null);
+      if (value.length >= 12 && el?.closest('.rr-reader')) {
+        clearTimeout(timer);
+        setText(value);
+      } else {
+        clearTimeout(timer);
+        timer = setTimeout(() => setText(''), 2500);
+      }
+    };
+    document.addEventListener('selectionchange', onChange);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('selectionchange', onChange);
+    };
+  }, []);
+  return [text, setText] as const;
+}
+
 export function PaperContent({ paper }: { paper: Paper }) {
   const theme = useTheme();
+  const [selection, setSelection] = useReaderSelection();
   const [mode, setMode] = useState<'short' | 'full'>('short');
   const [parsed, setParsed] = useState<Parsed | null>(null);
   const [abstract, setAbstract] = useState('');
@@ -171,9 +202,33 @@ export function PaperContent({ paper }: { paper: Paper }) {
 
   const abstractHtml = parsed?.abstract || (abstract ? `<p>${escapeHtml(abstract)}</p>` : '');
 
+  const highlightBar = selection ? (
+    <div
+      style={{
+        position: 'fixed',
+        left: 16,
+        right: 16,
+        bottom: 'calc(env(safe-area-inset-bottom) + 72px)',
+        zIndex: 50,
+        display: 'flex',
+        justifyContent: 'center',
+      }}>
+      <Button
+        label="Save highlight as note"
+        variant="primary"
+        onPress={() => {
+          const quote = selection.slice(0, 1500);
+          setSelection('');
+          router.push({ pathname: '/note/edit', params: { paperId: String(paper.id), quote } });
+        }}
+      />
+    </div>
+  ) : null;
+
   return (
     <View style={styles.box}>
       {style}
+      {highlightBar}
       {parsed && (
         <Row>
           <Chip label="Short" selected={mode === 'short'} onPress={() => setMode('short')} />
@@ -190,6 +245,7 @@ export function PaperContent({ paper }: { paper: Paper }) {
             text={parsed?.plain || abstract}
             abstract={abstract || htmlToText(parsed?.abstract ?? '')}
           />
+          <PaperCards paper={paper} text={parsed?.plain || abstract} />
           <ThemedText type="smallBold" style={styles.heading}>
             Abstract
           </ThemedText>

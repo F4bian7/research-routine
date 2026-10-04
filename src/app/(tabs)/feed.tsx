@@ -187,7 +187,7 @@ export default function FeedScreen() {
 
           {tab === 'people' ? (
             ctx.people.length === 0 ? (
-              <FeedMessage text='Follow researchers in the Topics tab ("People") to see their papers and posts here.' />
+              <FeedMessage text='Follow researchers in the Brain tab (People) to see their papers and posts here.' />
             ) : !current ? (
               <FeedMessage text="Loading …" />
             ) : !current.ok ? (
@@ -226,7 +226,7 @@ export default function FeedScreen() {
             <FeedMessage
               text={
                 tab === 'new'
-                  ? 'Nothing new. Check the topic keywords in the Topics tab.'
+                  ? 'Nothing new. Check the topic keywords in the Brain tab (Topics).'
                   : 'Nothing here right now.'
               }
             />
