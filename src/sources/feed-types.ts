@@ -10,6 +10,7 @@ export type FeedPaper = {
   venue: string;
   topicId: number | null;
   upvotes?: number;
+  authorIds?: string[]; // OpenAlex author ids, for the people timeline
 };
 
 export type BlueskyPost = {

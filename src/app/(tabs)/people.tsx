@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -9,9 +9,11 @@ import { Button, Chip, Field, Row } from '@/components/ui';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useQuery } from '@/data/use-query';
 import { type Db, useDb } from '@/db/db';
+import { suggestPeople } from '@/data/people';
 import { listPeople } from '@/db/repos/people';
 import { addTopic, deleteTopic, listTopics, updateTopic } from '@/db/repos/topics';
 import type { Person, Topic } from '@/db/types';
+import type { CoAuthor } from '@/sources/openalex';
 import { useTheme } from '@/hooks/use-theme';
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#64748B'];
@@ -81,6 +83,49 @@ function PersonRow({ person, topics }: { person: Person; topics: Topic[] }) {
   );
 }
 
+// Authors who show up most in the backlog, with a one-tap follow.
+function Suggestions({ followedCount }: { followedCount: number }) {
+  const db = useDb();
+  const [list, setList] = useState<CoAuthor[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    suggestPeople(db)
+      .then((s) => alive && setList(s))
+      .catch(() => alive && setList([]));
+    return () => {
+      alive = false;
+    };
+  }, [db, followedCount]);
+  if (!list || list.length === 0) return null;
+  return (
+    <View style={styles.suggestions}>
+      <ThemedText type="smallBold">People you might follow</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">
+        Authors who appear most often in your backlog and archive.
+      </ThemedText>
+      {list.map((a) => (
+        <View key={a.id} style={styles.row}>
+          <View style={styles.flex}>
+            <ThemedText style={styles.bold}>{a.name}</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+              {[a.institution, `${a.count} of your papers`].filter(Boolean).join(' · ')}
+            </ThemedText>
+          </View>
+          <Button
+            label="Follow"
+            onPress={() =>
+              router.push({
+                pathname: '/person/follow',
+                params: { id: a.id, name: a.name, institution: a.institution },
+              })
+            }
+          />
+        </View>
+      ))}
+    </View>
+  );
+}
+
 async function load(db: Db) {
   const [topics, people] = await Promise.all([listTopics(db), listPeople(db)]);
   return { topics, people };
@@ -114,7 +159,7 @@ export default function TopicsScreen() {
                 }
               />
             ) : (
-              <Button label="+ Person" variant="primary" onPress={() => router.push('/person/edit')} />
+              <Button label="+ Follow" variant="primary" onPress={() => router.push('/person/follow')} />
             )}
           </View>
 
@@ -156,11 +201,17 @@ export default function TopicsScreen() {
               </ScrollView>
               {shown.length === 0 ? (
                 <ThemedText themeColor="textSecondary">
-                  {people.length === 0 ? 'Nobody yet. Add the first person with "+ Person".' : 'Nobody in this topic.'}
+                  {people.length === 0 ? 'Nobody yet. Tap "+ Follow" or pick someone below.' : 'Nobody in this topic.'}
                 </ThemedText>
               ) : (
                 shown.map((p) => <PersonRow key={p.id} person={p} topics={topics} />)
               )}
+              <Suggestions followedCount={people.length} />
+              <Pressable onPress={() => router.push('/person/edit')} hitSlop={8}>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.underline}>
+                  Add someone by hand (for groups or people without papers)
+                </ThemedText>
+              </Pressable>
             </>
           )}
         </ScrollView>
@@ -201,4 +252,6 @@ const styles = StyleSheet.create({
   bold: { fontWeight: 700 },
   dots: { flexDirection: 'row', gap: 4 },
   dot: { width: 10, height: 10, borderRadius: 5 },
+  suggestions: { gap: Spacing.two, marginTop: Spacing.three },
+  underline: { textDecorationLine: 'underline' },
 });

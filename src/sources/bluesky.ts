@@ -109,3 +109,36 @@ export async function followedPosts(source: string): Promise<BlueskyPost[]> {
     .flatMap((f) => f.feed.map((x) => toPost(x.post)))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
+
+export type BlueskyActor = { handle: string; name: string; description: string; avatar?: string };
+
+type ActorView = { handle: string; displayName?: string; description?: string; avatar?: string };
+
+const toActor = (a: ActorView): BlueskyActor => ({
+  handle: a.handle,
+  name: a.displayName || a.handle,
+  description: a.description ?? '',
+  avatar: a.avatar,
+});
+
+export async function searchActors(query: string): Promise<BlueskyActor[]> {
+  const data = await get<{ actors: ActorView[] }>('app.bsky.actor.searchActors', {
+    q: query,
+    limit: '10',
+  });
+  return data.actors.map(toActor);
+}
+
+// Profiles (for avatars) of up to 25 handles per request.
+export async function getProfiles(handles: string[]): Promise<Map<string, BlueskyActor>> {
+  const out = new Map<string, BlueskyActor>();
+  for (let i = 0; i < handles.length; i += 25) {
+    const params = new URLSearchParams();
+    handles.slice(i, i + 25).forEach((h) => params.append('actors', h));
+    const res = await fetch(`${API}/app.bsky.actor.getProfiles?${params}`);
+    if (!res.ok) continue;
+    const data = (await res.json()) as { profiles: ActorView[] };
+    for (const p of data.profiles) out.set(p.handle, toActor(p));
+  }
+  return out;
+}

@@ -53,7 +53,7 @@ const KIND_LABEL: Record<TaskKind, string> = {
   inbox: 'New papers',
   inbox_backlog: 'New papers + survey',
   backlog: 'Backlog paper',
-  social: 'Bluesky',
+  social: 'People feed',
   trending: 'Trending',
   custom: 'Nothing extra',
 };

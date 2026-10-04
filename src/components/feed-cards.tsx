@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 
@@ -10,6 +11,7 @@ import { useDb } from '@/db/db';
 import { type FeedDecision, setFeedDecision } from '@/db/repos/feed';
 import type { Topic } from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
+import type { TimelineItem } from '@/data/people';
 import type { BlueskyPost, FeedPaper } from '@/sources/feed-types';
 
 function relativeTime(iso: string) {
@@ -156,6 +158,57 @@ export function BlueskyPostCard({ post, saved }: { post: BlueskyPost; saved: boo
   );
 }
 
+function initials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+}
+
+// A people-feed entry: who did what, then the paper or post itself.
+export function TimelineCard({
+  item,
+  avatar,
+  decisions,
+}: {
+  item: TimelineItem;
+  avatar?: string;
+  decisions: Map<string, FeedDecision>;
+}) {
+  const theme = useTheme();
+  const what = item.kind === 'paper' ? 'published a paper' : 'posted on Bluesky';
+  return (
+    <View style={styles.timeline}>
+      <Pressable
+        onPress={() => router.push({ pathname: '/person/[id]', params: { id: String(item.person.id) } })}
+        style={styles.topRow}>
+        {avatar ? (
+          <Image source={{ uri: avatar }} style={styles.avatar} />
+        ) : (
+          <View style={[styles.avatar, styles.initials, { backgroundColor: theme.backgroundSelected }]}>
+            <ThemedText type="smallBold">{initials(item.person.name)}</ThemedText>
+          </View>
+        )}
+        <ThemedText type="small" style={styles.flex}>
+          <ThemedText type="smallBold">{item.person.name}</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            {' '}
+            {what} · {relativeTime(item.at)}
+          </ThemedText>
+        </ThemedText>
+      </Pressable>
+      {item.kind === 'paper' ? (
+        <FeedPaperCard paper={item.paper} decision={decisions.get(item.paper.id)} />
+      ) : (
+        <BlueskyPostCard post={item.post} saved={decisions.get(bskyKey(item.post)) === 'saved'} />
+      )}
+    </View>
+  );
+}
+
 export function FeedMessage({ text, onRetry }: { text: string; onRetry?: () => void }) {
   return (
     <View style={styles.message}>
@@ -175,4 +228,6 @@ const styles = StyleSheet.create({
   linkCard: { borderWidth: 1, borderRadius: Spacing.two, padding: Spacing.two, gap: Spacing.half },
   image: { width: '100%', aspectRatio: 16 / 9, borderRadius: Spacing.two },
   message: { gap: Spacing.two, paddingVertical: Spacing.three },
+  timeline: { gap: Spacing.two },
+  initials: { alignItems: 'center', justifyContent: 'center' },
 });

@@ -3,41 +3,53 @@ import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { BlueskyPostCard, bskyKey, FeedMessage, FeedPaperCard } from '@/components/feed-cards';
+import {
+  BlueskyPostCard,
+  bskyKey,
+  FeedMessage,
+  FeedPaperCard,
+  TimelineCard,
+} from '@/components/feed-cards';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button, Chip, Row } from '@/components/ui';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { loadBluesky, loadNewPapers, loadTrending, NEW_PAPERS_DAYS } from '@/data/feeds';
+import { loadTimeline, type Timeline } from '@/data/people';
 import { useQuery } from '@/data/use-query';
 import type { Db } from '@/db/db';
 import { getFeedDecisions } from '@/db/repos/feed';
+import { listPeople } from '@/db/repos/people';
 import { getSettings } from '@/db/repos/settings';
 import { listTopics } from '@/db/repos/topics';
 import type { BlueskyPost, FeedPaper } from '@/sources/feed-types';
 
-export type FeedTab = 'new' | 'trending' | 'bluesky';
+export type FeedTab = 'people' | 'new' | 'trending' | 'bluesky';
 
 type Load<T> = { state: 'loading' } | { state: 'error' } | { state: 'done'; items: T[] };
 
 async function loadContext(db: Db) {
-  const [topics, settings, decisions] = await Promise.all([
+  const [topics, settings, decisions, people] = await Promise.all([
     listTopics(db),
     getSettings(db),
     getFeedDecisions(db),
+    listPeople(db),
   ]);
-  return { topics, settings, decisions };
+  return { topics, settings, decisions, people };
 }
 
 type Result =
-  | { key: string; ok: true; papers: FeedPaper[]; posts: BlueskyPost[] }
+  | { key: string; ok: true; papers: FeedPaper[]; posts: BlueskyPost[]; timeline?: Timeline }
   | { key: string; ok: false };
 
 function fetchFeed(
   tab: FeedTab,
   ctx: Awaited<ReturnType<typeof loadContext>>,
   refresh: boolean
-): Promise<{ papers: FeedPaper[]; posts: BlueskyPost[] }> {
+): Promise<{ papers: FeedPaper[]; posts: BlueskyPost[]; timeline?: Timeline }> {
+  if (tab === 'people') {
+    return loadTimeline(ctx.people, refresh).then((timeline) => ({ papers: [], posts: [], timeline }));
+  }
   if (tab === 'bluesky') {
     return loadBluesky(ctx.settings.blueskySource, ctx.topics, refresh).then((posts) => ({
       papers: [],
@@ -51,15 +63,21 @@ function fetchFeed(
 export default function FeedScreen() {
   const params = useLocalSearchParams<{ tab?: FeedTab }>();
   // The tab lives in the route, so the "Today" card can open a specific feed.
-  const tab: FeedTab = params.tab ?? 'new';
+  const ctx = useQuery(loadContext);
+  // Without anyone followed the people timeline would be empty, so start with "New".
+  const tab: FeedTab = params.tab ?? (ctx && ctx.people.length === 0 ? 'new' : 'people');
   const setTab = (t: FeedTab) => router.setParams({ tab: t });
   const [topicId, setTopicId] = useState<number | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const ctx = useQuery(loadContext);
 
   const key = ctx
-    ? `${tab}|${ctx.topics.map((t) => `${t.id}=${t.keywords}`).join(',')}|${ctx.settings.blueskySource}`
+    ? [
+        tab,
+        ctx.topics.map((t) => `${t.id}=${t.keywords}`).join(','),
+        ctx.settings.blueskySource,
+        ctx.people.map((p) => `${p.id}:${p.openalexId}:${p.links.bluesky ?? ''}`).join(','),
+      ].join('|')
     : null;
 
   // Loads go through a session cache, so re-running after a like costs no request.
@@ -116,6 +134,7 @@ export default function FeedScreen() {
           </View>
 
           <Row>
+            <Chip label="People" selected={tab === 'people'} onPress={() => setTab('people')} />
             <Chip label="New" selected={tab === 'new'} onPress={() => setTab('new')} />
             <Chip label="Trending" selected={tab === 'trending'} onPress={() => setTab('trending')} />
             <Chip label="Bluesky" selected={tab === 'bluesky'} onPress={() => setTab('bluesky')} />
@@ -142,6 +161,11 @@ export default function FeedScreen() {
               </ScrollView>
             </>
           )}
+          {tab === 'people' && ctx.people.length > 0 && (
+            <ThemedText type="small" themeColor="textSecondary">
+              Papers and Bluesky posts of the {ctx.people.length} people you follow, newest first.
+            </ThemedText>
+          )}
           {tab === 'trending' && (
             <ThemedText type="small" themeColor="textSecondary">
               Hugging Face Daily Papers, most upvoted first. Mostly machine learning in general.
@@ -155,7 +179,28 @@ export default function FeedScreen() {
             </ThemedText>
           )}
 
-          {tab === 'bluesky' ? (
+          {tab === 'people' ? (
+            ctx.people.length === 0 ? (
+              <FeedMessage text='Follow researchers in the Topics tab ("People") to see their papers and posts here.' />
+            ) : !current ? (
+              <FeedMessage text="Loading …" />
+            ) : !current.ok ? (
+              <FeedMessage text="Could not load the people feed. Are you online?" onRetry={refresh} />
+            ) : !current.timeline || current.timeline.items.length === 0 ? (
+              <FeedMessage text="Nothing new from the people you follow." />
+            ) : (
+              current.timeline.items
+                .filter((i) => i.kind === 'post' || decisions.get(i.paper.id) !== 'down')
+                .map((i) => (
+                  <TimelineCard
+                    key={i.kind === 'post' ? i.post.uri : `${i.person.id}:${i.paper.id}`}
+                    item={i}
+                    avatar={current.timeline!.avatars.get(String(i.person.id))}
+                    decisions={decisions}
+                  />
+                ))
+            )
+          ) : tab === 'bluesky' ? (
             posts.state === 'loading' ? (
               <FeedMessage text="Loading …" />
             ) : posts.state === 'error' ? (

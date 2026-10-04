@@ -18,7 +18,10 @@ type Work = {
   title?: string;
   publication_year?: number;
   abstract_inverted_index?: Record<string, number[]> | null;
-  authorships?: { author: { display_name: string } }[];
+  authorships?: {
+    author: { id?: string; display_name: string };
+    institutions?: { display_name: string }[];
+  }[];
   primary_location?: { source?: { display_name?: string } | null } | null;
 };
 
@@ -68,7 +71,12 @@ export function workToFeedPaper(w: Work, topicId: number | null): FeedPaper {
     abstract: rebuildAbstract(w.abstract_inverted_index),
     venue: arxiv ? 'arXiv' : (w.primary_location?.source?.display_name ?? ''),
     topicId,
+    authorIds: (w.authorships ?? []).map((a) => shortId(a.author.id ?? '')).filter(Boolean),
   };
+}
+
+export function shortId(openalexUrl: string) {
+  return openalexUrl.split('/').pop() ?? '';
 }
 
 // Recent works whose title or abstract match the query: arXiv preprints or
@@ -141,4 +149,45 @@ export async function authorWorks(authorId: string): Promise<FeedPaper[]> {
   if (!res.ok) throw new Error(`OpenAlex ${res.status}`);
   const data = (await res.json()) as { results?: Work[] };
   return (data.results ?? []).map((w) => workToFeedPaper(w, null)).filter((p) => p.title);
+}
+
+// Newest works of several authors at once (OpenAlex allows up to 50 ids per filter).
+export async function worksByAuthors(authorIds: string[], perPage = 50): Promise<FeedPaper[]> {
+  if (authorIds.length === 0) return [];
+  const url =
+    `https://api.openalex.org/works?filter=author.id:${authorIds.slice(0, 50).join('|')}` +
+    `&sort=publication_date:desc&per_page=${perPage}&select=${SELECT}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`OpenAlex ${res.status}`);
+  const data = (await res.json()) as { results?: Work[] };
+  return (data.results ?? []).map((w) => workToFeedPaper(w, null)).filter((p) => p.title);
+}
+
+export type CoAuthor = { id: string; name: string; institution: string; count: number };
+
+// Authors of the given DOIs, most frequent first. One request for up to 50 DOIs.
+export async function authorsOfDois(dois: string[]): Promise<CoAuthor[]> {
+  if (dois.length === 0) return [];
+  const url =
+    `https://api.openalex.org/works?filter=doi:${dois.slice(0, 50).map(encodeURIComponent).join('|')}` +
+    '&per_page=50&select=doi,authorships';
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`OpenAlex ${res.status}`);
+  const data = (await res.json()) as { results?: Work[] };
+  const byId = new Map<string, CoAuthor>();
+  for (const w of data.results ?? []) {
+    for (const a of w.authorships ?? []) {
+      const id = shortId(a.author.id ?? '');
+      if (!id) continue;
+      const entry = byId.get(id) ?? {
+        id,
+        name: a.author.display_name,
+        institution: a.institutions?.[0]?.display_name ?? '',
+        count: 0,
+      };
+      entry.count += 1;
+      byId.set(id, entry);
+    }
+  }
+  return [...byId.values()].sort((x, y) => y.count - x.count);
 }

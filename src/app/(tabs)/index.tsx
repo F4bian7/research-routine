@@ -28,7 +28,7 @@ const KIND_FEED: Record<TaskKind, { tab: FeedTab; label: string } | null> = {
   inbox: { tab: 'new', label: 'Open new papers' },
   inbox_backlog: { tab: 'new', label: 'Open new papers' },
   backlog: null,
-  social: { tab: 'bluesky', label: 'Open Bluesky feed' },
+  social: { tab: 'people', label: 'Open people feed' },
   trending: { tab: 'trending', label: 'Open trending papers' },
   custom: null,
 };

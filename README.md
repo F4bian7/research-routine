@@ -22,6 +22,9 @@ It ships as an installable web app (PWA) on GitHub Pages:
 | English UI | done |
 | Topics tab: names, colours, feed keywords | done |
 | People: links, newest papers (OpenAlex) and Bluesky posts per person | done |
+| Follow in two taps, suggestions from the backlog, people timeline in the feed | done |
+| Notes (second brain) | next |
+| Learn: daily lesson and spaced repetition | open |
 | Settings: routine, weekend rule, reminder (calendar or Shortcuts), quick links, JSON backup | done |
 
 ## Install on the iPhone
