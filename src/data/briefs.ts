@@ -45,7 +45,7 @@ async function saveBrief(db: Db, id: string, b: Brief) {
 export async function ensureBriefs(db: Db, items: BriefInput[]): Promise<Map<string, Brief>> {
   const known = await getBriefs(db, items.map((i) => i.id));
   const missing = items.filter((i) => !known.has(i.id));
-  const g = missing.length ? await getGemini(db) : null;
+  const g = missing.length ? await getGemini(db, 'fast') : null;
   if (!g) return known;
   const profile = await readerProfile(db);
   for (let i = 0; i < missing.length; i += CHUNK) {
@@ -60,7 +60,7 @@ export async function ensureBriefs(db: Db, items: BriefInput[]): Promise<Map<str
 }
 
 export async function moreAbout(db: Db, item: BriefInput, brief: Brief | undefined): Promise<Brief> {
-  const g = await getGemini(db);
+  const g = await getGemini(db, 'fast');
   if (!g) throw new Error('no key');
   const text = await explainMore(g, await readerProfile(db), item);
   const next = { ...(brief ?? { score: 3, gist: '', why: '' }), more: text };

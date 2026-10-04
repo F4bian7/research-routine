@@ -249,44 +249,54 @@ export function GeminiSection({ settings }: { settings: Settings }) {
   const db = useDb();
   const [key, setKey] = useState(settings.geminiApiKey ?? '');
   const [model, setModel] = useState(settings.geminiModel);
+  const [fast, setFast] = useState(settings.geminiFastModel);
   const [status, setStatus] = useState('');
+  const usage =
+    settings.geminiUsage.date === todayKey()
+      ? Object.entries(settings.geminiUsage.counts)
+          .map(([m, n]) => `${m}: ${n}`)
+          .join(' · ')
+      : '';
 
   async function save() {
     await setSetting(db, 'geminiApiKey', key.trim() || null);
     await setSetting(db, 'geminiModel', model.trim() || DEFAULT_SETTINGS.geminiModel);
+    await setSetting(db, 'geminiFastModel', fast.trim() || DEFAULT_SETTINGS.geminiFastModel);
   }
 
   async function test() {
     await save();
     if (!key.trim()) return setStatus('Enter a key first.');
     setStatus('Asking Gemini …');
-    try {
-      const chosen = model.trim() || DEFAULT_SETTINGS.geminiModel;
-      const used = await testGemini({
-        apiKey: key.trim(),
-        model: chosen,
-        onModel: (m) => {
-          setModel(m);
-          setSetting(db, 'geminiModel', m);
-        },
-      });
-      setStatus(
-        used === chosen
-          ? `Works with ${used}.`
-          : `${chosen} is not available for this key; switched to ${used}, which works.`
-      );
-    } catch (e) {
-      setStatus(explainError(e));
+    const lines: string[] = [];
+    for (const [label, chosen, setter, settingKey] of [
+      ['Quality', model.trim() || DEFAULT_SETTINGS.geminiModel, setModel, 'geminiModel'],
+      ['Fast', fast.trim() || DEFAULT_SETTINGS.geminiFastModel, setFast, 'geminiFastModel'],
+    ] as const) {
+      try {
+        const used = await testGemini({
+          apiKey: key.trim(),
+          model: chosen,
+          onModel: (m) => {
+            setter(m);
+            setSetting(db, settingKey, m);
+          },
+        });
+        lines.push(used === chosen ? `${label}: ${used} works.` : `${label}: ${chosen} is not available, now using ${used}.`);
+      } catch (e) {
+        lines.push(`${label}: ${explainError(e)}`);
+      }
     }
+    setStatus(lines.join('\n'));
   }
 
   return (
-    <Section title="Summaries with Gemini">
+    <Section title="Gemini (summaries, lessons, ratings)">
       <Hint>
         Free key from Google AI Studio: sign in, {'"Create API key"'}, copy the key and paste it
         here. The key stays on this device and is never part of a backup. On the free tier
-        Google may use the paper text it receives to improve its products; your notes are
-        never sent.
+        Google may use the text it receives to improve its products; your notes are never
+        sent.
       </Hint>
       <Button label="Open Google AI Studio ↗" onPress={() => openUrl('https://aistudio.google.com/apikey')} />
       <Field
@@ -299,11 +309,24 @@ export function GeminiSection({ settings }: { settings: Settings }) {
         autoCorrect={false}
         placeholder="AIza…"
       />
-      <Field label="Model" value={model} onChangeText={setModel} onBlur={save} autoCapitalize="none" autoCorrect={false} />
+      <Hint>
+        Two models share the work. The quality model writes lessons, course plans and paper
+        summaries, a few requests a day. The fast model rates and explains feed items and
+        drafts flashcards, which can be many; Flash-Lite models have a much larger free daily
+        limit. If one has no quota left, the other steps in.
+      </Hint>
+      <Field label="Quality model" value={model} onChangeText={setModel} onBlur={save} autoCapitalize="none" autoCorrect={false} />
+      <Field label="Fast model" value={fast} onChangeText={setFast} onBlur={save} autoCapitalize="none" autoCorrect={false} />
       <Row>
         <Button label="Test key" variant="primary" onPress={test} />
+        <Button
+          label="Your limits ↗"
+          variant="ghost"
+          onPress={() => openUrl('https://aistudio.google.com/rate-limit?timeRange=last-28-days')}
+        />
       </Row>
       {status ? <ThemedText type="small">{status}</ThemedText> : null}
+      <Hint>{usage ? `Requests today: ${usage}` : 'No requests today yet.'}</Hint>
     </Section>
   );
 }

@@ -91,3 +91,31 @@ test('a wrong key is reported, not retried', async () => {
     globalThis.fetch = real;
   }
 });
+
+test('a model out of daily quota hands over to its fallback without being replaced', async () => {
+  const { generateJson } = await import('./gemini');
+  const real = globalThis.fetch;
+  const asked: string[] = [];
+  globalThis.fetch = (async (url: string) => {
+    const model = decodeURIComponent(String(url).split('/models/')[1].split(':')[0]);
+    asked.push(model);
+    if (model === 'strong-flash') {
+      return new Response(JSON.stringify({ error: { message: 'Quota exceeded for metric requests per day, limit: 20' } }), {
+        status: 429,
+      });
+    }
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] }));
+  }) as typeof fetch;
+  try {
+    let replaced = '';
+    let used = '';
+    const g = { apiKey: 'k', model: 'strong-flash', fallbacks: ['lite'], onModel: (m: string) => (replaced = m), onUsed: (m: string) => (used = m) };
+    await generateJson(g, 'i', 'x', (t) => JSON.parse(t));
+    assert.equal(used, 'lite');
+    assert.equal(replaced, ''); // tomorrow the strong model has quota again
+    await generateJson(g, 'i', 'x', (t) => JSON.parse(t));
+    assert.deepEqual(asked, ['strong-flash', 'lite', 'lite']); // exhausted model skipped for now
+  } finally {
+    globalThis.fetch = real;
+  }
+});

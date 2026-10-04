@@ -93,7 +93,9 @@ export type Settings = {
   quickLinks: QuickLink[];
   // Gemini API key for summaries. Stays on the device; never part of a JSON export.
   geminiApiKey: string | null;
-  geminiModel: string;
+  geminiModel: string; // for lessons, course plans and paper summaries
+  geminiFastModel: string; // for ratings, explanations and flashcards (larger free quota)
+  geminiUsage: { date: string; counts: Record<string, number> }; // requests today per model
   // Bluesky accounts (handles) or one list URL; empty = search posts by topic keywords.
   blueskySource: string;
   openalexKey: string | null; // optional; raises the daily OpenAlex budget tenfold

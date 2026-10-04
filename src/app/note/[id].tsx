@@ -69,7 +69,7 @@ export default function NoteScreen() {
 
   async function suggestCards() {
     if (!note) return;
-    const g = await getGemini(db);
+    const g = await getGemini(db, 'fast');
     if (!g) return setStatus('Add the free Gemini key in Settings first.');
     setBusy(true);
     setStatus('');

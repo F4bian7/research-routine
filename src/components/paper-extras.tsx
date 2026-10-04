@@ -61,7 +61,7 @@ export function PaperCards({ paper, text }: { paper: Paper; text: string }) {
   const fromPaper = cards.filter((c) => c.source === 'paper');
 
   async function suggest() {
-    const g = await getGemini(db);
+    const g = await getGemini(db, 'fast');
     if (!g) return setStatus('Add the free Gemini key in Settings first.');
     setBusy(true);
     setStatus('');

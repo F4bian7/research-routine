@@ -20,15 +20,22 @@ export const MAX_NEW_CARDS = 5;
 
 export const XP = { lesson: 10, quizRight: 5, card: 2 };
 
-// Key and model from Settings; a model that turns out to work in place of the chosen
-// one is saved, so the next request goes there directly.
-export async function getGemini(db: Db): Promise<Gemini | null> {
+// Two models: a strong one for the few requests where quality counts most (lessons,
+// course plans, paper summaries) and a fast one with a much larger free daily quota for
+// the many small ones (ratings, explanations, flashcards). Each is the other's fallback.
+export type GeminiUse = 'quality' | 'fast';
+
+export async function getGemini(db: Db, use: GeminiUse = 'quality'): Promise<Gemini | null> {
   const s = await getSettings(db);
   if (!s.geminiApiKey) return null;
+  const key = use === 'quality' ? 'geminiModel' : 'geminiFastModel';
+  const [model, other] =
+    use === 'quality' ? [s.geminiModel, s.geminiFastModel] : [s.geminiFastModel, s.geminiModel];
   return {
     apiKey: s.geminiApiKey,
-    model: s.geminiModel,
-    onModel: (model) => void setSetting(db, 'geminiModel', model),
+    model,
+    fallbacks: [other],
+    onModel: (m) => void setSetting(db, key, m),
   };
 }
 

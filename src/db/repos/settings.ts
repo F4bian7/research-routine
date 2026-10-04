@@ -14,6 +14,8 @@ export async function getSettings(db: Db): Promise<Settings> {
     quickLinks: stored.quickLinks ?? DEFAULT_SETTINGS.quickLinks,
     geminiApiKey: stored.geminiApiKey ?? DEFAULT_SETTINGS.geminiApiKey,
     geminiModel: stored.geminiModel || DEFAULT_SETTINGS.geminiModel,
+    geminiFastModel: stored.geminiFastModel || DEFAULT_SETTINGS.geminiFastModel,
+    geminiUsage: stored.geminiUsage ?? DEFAULT_SETTINGS.geminiUsage,
     blueskySource: stored.blueskySource ?? DEFAULT_SETTINGS.blueskySource,
     openalexKey: stored.openalexKey ?? DEFAULT_SETTINGS.openalexKey,
     focusTopicId: stored.focusTopicId ?? DEFAULT_SETTINGS.focusTopicId,

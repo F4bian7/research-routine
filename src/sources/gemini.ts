@@ -33,7 +33,13 @@ export class GeminiError extends Error {
 
 // Key, model, and a callback that remembers a model found to work when the chosen
 // one is not available (for example no free quota for it).
-export type Gemini = { apiKey: string; model: string; onModel?: (model: string) => void };
+export type Gemini = {
+  apiKey: string;
+  model: string;
+  fallbacks?: string[]; // tried in order when `model` has no quota left
+  onModel?: (model: string) => void; // called when `model` is gone and another took over
+  onUsed?: (model: string) => void; // called with the model that answered
+};
 
 type GenerateResponse = {
   candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] }; finishReason?: string }[];
@@ -112,18 +118,37 @@ export async function listModels(apiKey: string): Promise<string[]> {
     });
 }
 
-// Errors that another model may not have: unknown model, or no (free) quota for it.
-function tryAnotherModel(e: unknown) {
-  if (!(e instanceof GeminiError)) return false;
-  if (e.status === 404) return true;
-  if (e.status === 429 && /limit: ?0\b|free.?tier|quota/i.test(e.message)) return true;
-  if (e.status === 400 && /not (supported|found)|unsupported/i.test(e.message)) return true;
-  return false;
+// Why a model failed, and what that means for trying another one.
+//  - 'gone': unknown model or never any free quota; switch for good.
+//  - 'today': quota used up (per day or per minute); another model has its own quota.
+function failureKind(e: unknown): 'gone' | 'today' | null {
+  if (!(e instanceof GeminiError)) return null;
+  if (e.status === 404) return 'gone';
+  if (e.status === 400 && /not (supported|found)|unsupported/i.test(e.message)) return 'gone';
+  if (e.status === 429) return /limit: ?0\b/.test(e.message) ? 'gone' : 'today';
+  if (e.status === 503) return 'today'; // overloaded
+  return null;
 }
 
-// One JSON request to Gemini; `parse` turns the answer into the wanted shape. If the
-// chosen model is not available to the key, other Flash models are tried and the one
-// that works is remembered.
+// Models that ran out today are skipped until the quota resets (midnight Pacific).
+const exhausted = new Map<string, number>();
+const EXHAUSTED_FOR_MS = 3 * 3600 * 1000;
+
+function usable(model: string) {
+  const until = exhausted.get(model);
+  return !until || until < Date.now();
+}
+
+// Usage per model and day, for the counter in Settings.
+const usageListeners = new Set<(model: string) => void>();
+export function onGeminiUsage(listener: (model: string) => void) {
+  usageListeners.add(listener);
+  return () => usageListeners.delete(listener);
+}
+
+// One JSON request to Gemini; `parse` turns the answer into the wanted shape. When the
+// model has no quota left, the fallbacks (and then other Flash models of the key) are
+// tried; a model that is gone for good is replaced in Settings via `onModel`.
 export async function generateJson<T>(
   gemini: Gemini,
   instruction: string,
@@ -138,28 +163,43 @@ export async function generateJson<T>(
   };
   const run = async (model: string) => {
     const text = await callModel(gemini.apiKey, model, body);
+    usageListeners.forEach((l) => l(model));
     try {
       return parse(extractJson(text));
     } catch {
       throw new GeminiError(`Gemini's answer could not be read: ${text.slice(0, 120)}`);
     }
   };
-  try {
-    return await run(gemini.model);
-  } catch (e) {
-    if (!tryAnotherModel(e)) throw e;
-    const others = (await listModels(gemini.apiKey)).filter((m) => m !== gemini.model).slice(0, 4);
-    for (const model of others) {
-      try {
-        const out = await run(model);
-        gemini.onModel?.(model);
-        return out;
-      } catch (e2) {
-        if (!tryAnotherModel(e2)) throw e2;
+
+  const tried = new Set<string>();
+  let firstError: unknown = null;
+  let listed = false;
+  let chosenGone = false;
+  const queue = [gemini.model, ...(gemini.fallbacks ?? [])];
+  while (queue.length) {
+    const model = queue.shift()!;
+    if (tried.has(model)) continue;
+    tried.add(model);
+    // Skip a model that ran out earlier today, unless nothing else is left.
+    if (!usable(model) && queue.length) continue;
+    try {
+      const out = await run(model);
+      if (chosenGone && model !== gemini.model) gemini.onModel?.(model);
+      gemini.onUsed?.(model);
+      return out;
+    } catch (e) {
+      const kind = failureKind(e);
+      if (!kind) throw e;
+      firstError ??= e;
+      if (kind === 'today') exhausted.set(model, Date.now() + EXHAUSTED_FOR_MS);
+      if (kind === 'gone' && model === gemini.model) chosenGone = true;
+      if (!queue.length && !listed) {
+        listed = true;
+        queue.push(...(await listModels(gemini.apiKey)).filter((m) => !tried.has(m)).slice(0, 4));
       }
     }
-    throw e;
   }
+  throw firstError;
 }
 
 export async function summarize(
@@ -177,7 +217,7 @@ export async function summarize(
 export async function testGemini(g: Gemini): Promise<string> {
   let used = g.model;
   await generateJson(
-    { ...g, onModel: (m) => { used = m; g.onModel?.(m); } },
+    { ...g, onUsed: (m) => (used = m) },
     'Answer only with JSON: {"ok": true}',
     'Say ok.',
     (t) => {
