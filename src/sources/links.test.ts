@@ -54,3 +54,29 @@ test('arXiv metadata from the HTML rendering', async () => {
     venue: 'arXiv',
   });
 });
+
+test('Claude hand-over link carries title, links and abstract', async () => {
+  const { claudePrompt, claudeUrl } = await import('./claude');
+  const paper = {
+    id: 1,
+    title: 'U-Net',
+    authors: 'Ronneberger et al.',
+    year: 2015,
+    url: 'https://arxiv.org/pdf/1505.04597v1',
+    topicId: null,
+    type: 'milestone' as const,
+    status: 'queued' as const,
+    rating: null,
+    note: 'private note',
+    addedAt: '',
+    readAt: null,
+    position: 1,
+  };
+  const prompt = claudePrompt(paper, 'We present a network.');
+  assert.match(prompt, /Title: U-Net/);
+  assert.match(prompt, /Link: https:\/\/arxiv\.org\/abs\/1505\.04597/);
+  assert.match(prompt, /https:\/\/arxiv\.org\/html\/1505\.04597/);
+  assert.match(prompt, /We present a network\./);
+  assert.doesNotMatch(prompt, /private note/);
+  assert.ok(claudeUrl(paper, '').startsWith('https://claude.ai/new?q='));
+});

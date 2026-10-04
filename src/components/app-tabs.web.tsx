@@ -43,15 +43,15 @@ export default function AppTabs() {
         tabBarInactiveTintColor: colors.textSecondary,
         tabBarStyle: { backgroundColor: colors.background, borderTopColor: colors.border },
       }}>
-      <Tabs.Screen name="index" options={{ title: 'Heute', tabBarIcon: TodayIcon }} />
+      <Tabs.Screen name="index" options={{ title: 'Today', tabBarIcon: TodayIcon }} />
       <Tabs.Screen
         name="backlog"
         options={{ title: 'Backlog', tabBarIcon: BacklogIcon }}
       />
-      <Tabs.Screen name="people" options={{ title: 'Themen', tabBarIcon: PeopleIcon }} />
+      <Tabs.Screen name="people" options={{ title: 'Topics', tabBarIcon: PeopleIcon }} />
       <Tabs.Screen
         name="settings"
-        options={{ title: 'Einstellungen', tabBarIcon: SettingsIcon }}
+        options={{ title: 'Settings', tabBarIcon: SettingsIcon }}
       />
     </Tabs>
   );

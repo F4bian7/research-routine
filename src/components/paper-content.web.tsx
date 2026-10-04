@@ -12,7 +12,7 @@ import { parsePaperLink } from '@/sources/links';
 import { fetchMeta } from '@/sources/meta';
 
 // Web reader: arXiv's HTML rendering, sanitised and restyled for the phone.
-// "Kurz" follows the routine (abstract, figures, conclusion); "Volltext" is everything.
+// "Short" follows the routine (abstract, figures, conclusion); "Full text" is everything.
 
 type Parsed = {
   abstract: string;
@@ -159,12 +159,12 @@ export function PaperContent({ paper }: { paper: Paper }) {
   const style = <style>{css(theme.text, theme.textSecondary, theme.accent, theme.border)}</style>;
 
   if (state === 'loading') {
-    return <ThemedText themeColor="textSecondary">Lädt …</ThemedText>;
+    return <ThemedText themeColor="textSecondary">Loading …</ThemedText>;
   }
   if (state === 'failed') {
     return (
       <ThemedText themeColor="textSecondary">
-        Zu diesem Link habe ich keinen Text gefunden. Offline, oder weder arXiv noch DOI.
+        No text found for this link. You may be offline, or it is neither arXiv nor a DOI.
       </ThemedText>
     );
   }
@@ -176,8 +176,8 @@ export function PaperContent({ paper }: { paper: Paper }) {
       {style}
       {parsed && (
         <Row>
-          <Chip label="Kurz" selected={mode === 'short'} onPress={() => setMode('short')} />
-          <Chip label="Volltext" selected={mode === 'full'} onPress={() => setMode('full')} />
+          <Chip label="Short" selected={mode === 'short'} onPress={() => setMode('short')} />
+          <Chip label="Full text" selected={mode === 'full'} onPress={() => setMode('full')} />
         </Row>
       )}
 
@@ -185,20 +185,24 @@ export function PaperContent({ paper }: { paper: Paper }) {
         <Html html={parsed.full} />
       ) : (
         <>
-          <SummarySection paper={paper} text={parsed?.plain || abstract} />
+          <SummarySection
+            paper={paper}
+            text={parsed?.plain || abstract}
+            abstract={abstract || htmlToText(parsed?.abstract ?? '')}
+          />
           <ThemedText type="smallBold" style={styles.heading}>
             Abstract
           </ThemedText>
           {abstractHtml ? (
             <Html html={abstractHtml} />
           ) : (
-            <ThemedText themeColor="textSecondary">Kein Abstract gefunden.</ThemedText>
+            <ThemedText themeColor="textSecondary">No abstract found.</ThemedText>
           )}
 
           {parsed && parsed.figures.length > 0 && (
             <>
               <ThemedText type="smallBold" style={styles.heading}>
-                Abbildungen ({parsed.figures.length})
+                Figures ({parsed.figures.length})
               </ThemedText>
               <Html html={parsed.figures.join('')} />
             </>
@@ -207,7 +211,7 @@ export function PaperContent({ paper }: { paper: Paper }) {
           {parsed?.conclusion ? (
             <>
               <ThemedText type="smallBold" style={styles.heading}>
-                Fazit
+                Conclusion
               </ThemedText>
               <Html html={parsed.conclusion} />
             </>
@@ -215,14 +219,18 @@ export function PaperContent({ paper }: { paper: Paper }) {
 
           {!parsed && (
             <ThemedText type="small" themeColor="textSecondary">
-              Volltext gibt es in der App nur für arXiv-Paper. Das Original öffnet sich über den
-              Link oben.
+              Full text in the app is available for arXiv papers only. The original opens from the
+              link at the top.
             </ThemedText>
           )}
         </>
       )}
     </View>
   );
+}
+
+function htmlToText(html: string) {
+  return new DOMParser().parseFromString(html, 'text/html').body.textContent?.trim() ?? '';
 }
 
 function escapeHtml(s: string) {

@@ -1,7 +1,7 @@
 {
   "name": "Research Routine",
   "short_name": "Routine",
-  "lang": "de",
+  "lang": "en",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

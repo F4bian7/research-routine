@@ -5,9 +5,9 @@ import type { PaperType } from './types';
 
 // Seed rows are ordinary rows: editable and deletable like anything the user adds.
 const TOPICS = [
-  { name: 'Medizinische Bildsegmentierung', color: '#3B82F6' },
-  { name: 'EEG und Seizure-Analyse', color: '#10B981' },
-  { name: 'MRT-Physik und Rekonstruktion', color: '#F59E0B' },
+  { name: 'Medical image segmentation', color: '#3B82F6' },
+  { name: 'EEG and seizure analysis', color: '#10B981' },
+  { name: 'MRI physics and reconstruction', color: '#F59E0B' },
 ];
 
 // topic is an index into TOPICS.

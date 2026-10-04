@@ -20,9 +20,9 @@ export function PaperContent({ paper }: { paper: Paper }) {
 
   return (
     <View style={styles.box}>
-      {abstract ? <SummarySection paper={paper} text={abstract} /> : null}
+      {abstract ? <SummarySection paper={paper} text={abstract} abstract={abstract} /> : null}
       <ThemedText type="smallBold">Abstract</ThemedText>
-      <ThemedText>{abstract === null ? 'Lädt …' : abstract || 'Kein Abstract gefunden.'}</ThemedText>
+      <ThemedText>{abstract === null ? 'Loading …' : abstract || 'No abstract found.'}</ThemedText>
     </View>
   );
 }

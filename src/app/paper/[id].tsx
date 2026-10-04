@@ -44,7 +44,7 @@ export default function ReaderScreen() {
       <SafeAreaView edges={['top']} style={styles.container}>
         <View style={[styles.bar, { borderBottomColor: theme.border }]}>
           <Pressable onPress={goBack} hitSlop={12} style={styles.back}>
-            <ThemedText style={{ color: theme.accent }}>‹ Zurück</ThemedText>
+            <ThemedText style={{ color: theme.accent }}>‹ Back</ThemedText>
           </Pressable>
           {paper?.url ? (
             <Pressable onPress={() => openUrl(paper.url)} hitSlop={12} style={styles.back}>
@@ -54,7 +54,7 @@ export default function ReaderScreen() {
         </View>
 
         {!paper ? (
-          <ThemedText style={styles.content}>Dieses Paper gibt es nicht mehr.</ThemedText>
+          <ThemedText style={styles.content}>This paper no longer exists.</ThemedText>
         ) : (
           <ScrollView contentContainerStyle={styles.content}>
             {topic && (
@@ -92,20 +92,20 @@ export default function ReaderScreen() {
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
             <Field
-              label="Notiz"
+              label="Note"
               multiline
               value={note ?? paper.note}
               onChangeText={setNote}
               onBlur={() => {
                 if (note !== null && note !== paper.note) updatePaper(db, paper.id, { note });
               }}
-              placeholder="Was nehme ich mit?"
+              placeholder="What do I take away?"
             />
 
             {paper.status === 'queued' ? (
               <View style={styles.actions}>
                 <Button
-                  label="Gelesen"
+                  label="Mark read"
                   variant="primary"
                   onPress={async () => {
                     if (note !== null) await updatePaper(db, paper.id, { note });
@@ -114,7 +114,7 @@ export default function ReaderScreen() {
                   }}
                 />
                 <Button
-                  label="Später"
+                  label="Later"
                   onPress={async () => {
                     await postpone(db, paper.id);
                     goBack();
@@ -122,11 +122,11 @@ export default function ReaderScreen() {
                 />
               </View>
             ) : (
-              <Button label="Zurück in die Warteschlange" onPress={() => requeue(db, paper.id)} />
+              <Button label="Back to the queue" onPress={() => requeue(db, paper.id)} />
             )}
 
             <Button
-              label={confirmDelete ? 'Wirklich löschen?' : 'Löschen'}
+              label={confirmDelete ? 'Really delete?' : 'Delete'}
               variant={confirmDelete ? 'danger' : 'ghost'}
               onPress={async () => {
                 if (!confirmDelete) return setConfirmDelete(true);

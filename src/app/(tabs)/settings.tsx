@@ -32,11 +32,11 @@ export default function SettingsScreen() {
 
   async function test() {
     await save();
-    if (!keyValue.trim()) return setStatus('Erst einen Key eintragen.');
-    setStatus('Prüfe …');
+    if (!keyValue.trim()) return setStatus('Enter a key first.');
+    setStatus('Checking …');
     try {
       await checkKey(keyValue.trim(), modelValue.trim() || DEFAULT_SETTINGS.geminiModel);
-      setStatus('Funktioniert.');
+      setStatus('Works.');
     } catch (e) {
       setStatus(explainError(e));
     }
@@ -46,22 +46,21 @@ export default function SettingsScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView edges={['top']} style={styles.container}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <ThemedText style={styles.headline}>Einstellungen</ThemedText>
+          <ThemedText style={styles.headline}>Settings</ThemedText>
 
           <ThemedView type="backgroundElement" style={styles.section}>
-            <ThemedText type="smallBold">Zusammenfassungen mit Gemini</ThemedText>
+            <ThemedText type="smallBold">Summaries with Gemini</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              Kostenloser Key aus Google AI Studio: dort anmelden, „Create API key“, Key kopieren
-              und hier einfügen. Der Key bleibt auf diesem Gerät. In der Gratis-Stufe darf Google
-              die gesendeten Paper-Texte zur Verbesserung nutzen; deine Notizen werden nie
-              gesendet.
+              Free key from Google AI Studio: sign in, {'"Create API key"'}, copy the key and paste it
+              here. The key stays on this device. On the free tier Google may use the paper text
+              it receives to improve its products; your notes are never sent.
             </ThemedText>
             <Button
-              label="Google AI Studio öffnen ↗"
+              label="Open Google AI Studio ↗"
               onPress={() => openUrl('https://aistudio.google.com/apikey')}
             />
             <Field
-              label="API-Key"
+              label="API key"
               value={keyValue}
               onChangeText={setKey}
               onBlur={save}
@@ -71,7 +70,7 @@ export default function SettingsScreen() {
               placeholder="AIza…"
             />
             <Field
-              label="Modell"
+              label="Model"
               value={modelValue}
               onChangeText={setModel}
               onBlur={save}
@@ -79,13 +78,13 @@ export default function SettingsScreen() {
               autoCorrect={false}
             />
             <Row>
-              <Button label="Key testen" variant="primary" onPress={test} />
+              <Button label="Test key" variant="primary" onPress={test} />
             </Row>
             {status ? <ThemedText type="small">{status}</ThemedText> : null}
           </ThemedView>
 
           <ThemedText type="small" themeColor="textSecondary">
-            Routine, Erinnerung, Schnellzugriffe und Backup kommen in einem späteren Schritt.
+            Routine, reminder, quick links and backup come in a later step.
           </ThemedText>
         </ScrollView>
       </SafeAreaView>

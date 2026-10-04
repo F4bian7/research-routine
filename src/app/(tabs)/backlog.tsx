@@ -71,15 +71,15 @@ export default function BacklogScreen() {
           </View>
 
           <Row>
-            <Chip label="Warteschlange" selected={view === 'queue'} onPress={() => setView('queue')} />
-            <Chip label="Archiv" selected={view === 'archive'} onPress={() => setView('archive')} />
+            <Chip label="Queue" selected={view === 'queue'} onPress={() => setView('queue')} />
+            <Chip label="Archive" selected={view === 'archive'} onPress={() => setView('archive')} />
           </Row>
 
           {view === 'queue' ? (
             <>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <Row style={styles.noWrap}>
-                  <Chip label="Alle" selected={topicId === null} onPress={() => setTopicId(null)} />
+                  <Chip label="All" selected={topicId === null} onPress={() => setTopicId(null)} />
                   {topics.map((t) => (
                     <Chip
                       key={t.id}
@@ -95,13 +95,13 @@ export default function BacklogScreen() {
               {top ? (
                 <PaperCard paper={top} topic={topicOf(top)}>
                   <View style={styles.actions}>
-                    <Button label="Gelesen" style={styles.flex} onPress={() => markRead(db, top.id)} />
-                    <Button label="Später" style={styles.flex} onPress={() => postpone(db, top.id)} />
+                    <Button label="Mark read" style={styles.flex} onPress={() => markRead(db, top.id)} />
+                    <Button label="Later" style={styles.flex} onPress={() => postpone(db, top.id)} />
                   </View>
                 </PaperCard>
               ) : (
                 <ThemedText themeColor="textSecondary">
-                  Nichts in der Warteschlange{topicId ? ' für dieses Thema' : ''}.
+                  Nothing in the queue{topicId ? ' for this topic' : ''}.
                 </ThemedText>
               )}
 
@@ -109,7 +109,7 @@ export default function BacklogScreen() {
                 <>
                   <Pressable onPress={() => setShowRest(!showRest)} style={styles.toggle}>
                     <ThemedText type="smallBold" themeColor="textSecondary">
-                      {showRest ? '▾' : '▸'} Danach ({rest.length})
+                      {showRest ? '▾' : '▸'} Up next ({rest.length})
                     </ThemedText>
                   </Pressable>
                   {showRest && rest.map((p) => <PaperRow key={p.id} paper={p} topic={topicOf(p)} />)}
@@ -119,15 +119,15 @@ export default function BacklogScreen() {
           ) : (
             <>
               <Field
-                label="Suchen"
+                label="Search"
                 value={search}
                 onChangeText={setSearch}
-                placeholder="Titel, Autor:innen oder Notiz"
+                placeholder="Title, authors or note"
                 autoCorrect={false}
               />
               {archive.length === 0 ? (
                 <ThemedText themeColor="textSecondary">
-                  {search ? 'Nichts gefunden.' : 'Noch nichts gelesen.'}
+                  {search ? 'Nothing found.' : 'Nothing read yet.'}
                 </ThemedText>
               ) : (
                 archive.map((p) => (
@@ -137,7 +137,7 @@ export default function BacklogScreen() {
                     topic={topicOf(p)}
                     extra={[
                       p.rating === 'up' ? '👍' : p.rating === 'down' ? '👎' : '',
-                      p.readAt ? new Date(p.readAt).toLocaleDateString('de-DE') : '',
+                      p.readAt ? new Date(p.readAt).toLocaleDateString('en-GB') : '',
                       p.note,
                     ]
                       .filter(Boolean)

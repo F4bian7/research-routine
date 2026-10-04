@@ -11,7 +11,7 @@ export function PlaceholderScreen({ title }: { title: string }) {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.inner}>
         <ThemedText type="subtitle">{title}</ThemedText>
-        <ThemedText themeColor="textSecondary">Kommt im nächsten Schritt.</ThemedText>
+        <ThemedText themeColor="textSecondary">Coming in the next step.</ThemedText>
       </SafeAreaView>
     </ThemedView>
   );

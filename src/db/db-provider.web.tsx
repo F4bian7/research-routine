@@ -22,7 +22,7 @@ export function DbProvider({ children }: { children: ReactNode }) {
   if (error) {
     return (
       <View style={styles.center}>
-        <Text>Datenbank konnte nicht geladen werden: {error}</Text>
+        <Text>Could not load the database: {error}</Text>
       </View>
     );
   }

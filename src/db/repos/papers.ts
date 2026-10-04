@@ -141,7 +141,7 @@ export async function markRead(db: Db, id: number) {
   notifyChange();
 }
 
-// "Später": to the end of the queue.
+// "Later": to the end of the queue.
 export async function postpone(db: Db, id: number) {
   await db.runAsync('UPDATE papers SET position = ? WHERE id = ?', await nextPosition(db), id);
   notifyChange();

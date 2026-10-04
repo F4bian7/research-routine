@@ -43,7 +43,7 @@ export function PaperCard({
       <ThemedText type="small" themeColor="textSecondary">
         {paperMeta(paper)}
       </ThemedText>
-      <Button label="Lesen" variant="primary" onPress={() => openReader(paper)} />
+      <Button label="Open" variant="primary" onPress={() => openReader(paper)} />
       {children}
     </View>
   );

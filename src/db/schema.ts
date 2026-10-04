@@ -58,6 +58,29 @@ const MIGRATIONS: string[] = [
     created_at TEXT NOT NULL
   );
   `,
+  // The app switched to English: translate seed rows the user has not changed.
+  `
+  UPDATE topics SET name = 'Medical image segmentation' WHERE name = 'Medizinische Bildsegmentierung';
+  UPDATE topics SET name = 'EEG and seizure analysis' WHERE name = 'EEG und Seizure-Analyse';
+  UPDATE topics SET name = 'MRI physics and reconstruction' WHERE name = 'MRT-Physik und Rekonstruktion';
+  UPDATE day_tasks SET title = 'Go through new papers',
+    description = 'Open Scholar Inbox and rate 2 to 3 new papers.'
+    WHERE title = 'Neue Paper durchgehen';
+  UPDATE day_tasks SET title = 'One paper from the backlog',
+    description = 'Read the abstract, figures and conclusion.'
+    WHERE title = '1 Paper aus dem Backlog';
+  UPDATE day_tasks SET title = 'Skim the social feed',
+    description = 'Scroll through the Bluesky and X lists.'
+    WHERE title = 'Social-Feed überfliegen';
+  UPDATE day_tasks SET title = 'New papers plus a survey',
+    description = 'Go through new papers and start one survey or milestone paper.'
+    WHERE title = 'Neue Paper plus Survey';
+  UPDATE day_tasks SET title = 'Free day',
+    description = 'Optional: trending papers on alphaXiv or Hugging Face Daily Papers.'
+    WHERE title = 'Frei';
+  UPDATE settings SET value = replace(replace(value, 'Bluesky-Liste', 'Bluesky list'), 'X-Liste', 'X list')
+    WHERE key = 'quickLinks';
+  `,
 ];
 
 export async function migrateAndSeed(db: Db) {

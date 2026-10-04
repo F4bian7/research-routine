@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { openUrl } from '@/components/link-button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui';
@@ -11,19 +12,29 @@ import { type Db, useDb } from '@/db/db';
 import { getSettings } from '@/db/repos/settings';
 import { getSummary, saveSummary } from '@/db/repos/summaries';
 import type { Paper } from '@/db/types';
+import { claudeUrl } from '@/sources/claude';
 import { explainError, summarize } from '@/sources/gemini';
 
 const PARTS: { key: 'problem' | 'method' | 'result' | 'relevance' | 'limits'; label: string }[] = [
   { key: 'problem', label: 'Problem' },
-  { key: 'method', label: 'Vorgehen' },
-  { key: 'result', label: 'Ergebnis' },
-  { key: 'relevance', label: 'Warum wichtig' },
-  { key: 'limits', label: 'Grenzen' },
+  { key: 'method', label: 'Approach' },
+  { key: 'result', label: 'Result' },
+  { key: 'relevance', label: 'Why it matters' },
+  { key: 'limits', label: 'Limits' },
 ];
 
-// "Einfach erklärt": a stored Gemini summary, or a button to create one.
+// "Explained simply": a stored Gemini summary, or a button to create one.
 // `text` is what Gemini reads: the full text when available, otherwise the abstract.
-export function SummarySection({ paper, text }: { paper: Paper; text: string }) {
+// "Ask Claude" opens a claude.ai chat with the paper handed over, for follow-up questions.
+export function SummarySection({
+  paper,
+  text,
+  abstract,
+}: {
+  paper: Paper;
+  text: string;
+  abstract: string;
+}) {
   const db = useDb();
   const load = useCallback(
     async (d: Db) => ({ settings: await getSettings(d), summary: await getSummary(d, paper.id) }),
@@ -55,7 +66,7 @@ export function SummarySection({ paper, text }: { paper: Paper; text: string }) 
   return (
     <ThemedView type="backgroundElement" style={styles.box}>
       <ThemedText type="smallBold" style={styles.heading}>
-        Einfach erklärt
+        Explained simply
       </ThemedText>
 
       {summary ? (
@@ -69,7 +80,7 @@ export function SummarySection({ paper, text }: { paper: Paper; text: string }) 
           ))}
           {summary.terms.length > 0 && (
             <View style={styles.part}>
-              <ThemedText type="smallBold">Begriffe</ThemedText>
+              <ThemedText type="smallBold">Terms</ThemedText>
               {summary.terms.map((t) => (
                 <ThemedText key={t.term}>
                   <ThemedText style={styles.term}>{t.term}: </ThemedText>
@@ -79,28 +90,28 @@ export function SummarySection({ paper, text }: { paper: Paper; text: string }) 
             </View>
           )}
           <ThemedText type="small" themeColor="textSecondary">
-            Von Gemini erzeugt, kann Fehler enthalten.
+            Written by Gemini, may contain mistakes.
           </ThemedText>
         </>
       ) : !settings.geminiApiKey ? (
         <>
           <ThemedText themeColor="textSecondary">
-            Für Zusammenfassungen einmal einen kostenlosen Gemini-API-Key in den Einstellungen
-            eintragen.
+            For summaries, add a free Gemini API key in the settings once.
           </ThemedText>
-          <Button label="Zu den Einstellungen" onPress={() => router.navigate('/settings')} />
+          <Button label="Go to settings" onPress={() => router.navigate('/settings')} />
         </>
       ) : null}
 
       {settings.geminiApiKey && (
         <Button
-          label={busy ? 'Gemini liest …' : summary ? 'Neu erzeugen' : 'Erklären lassen'}
+          label={busy ? 'Gemini is reading …' : summary ? 'Regenerate' : 'Explain it'}
           variant={summary ? 'ghost' : 'primary'}
           disabled={busy || !text}
           onPress={run}
         />
       )}
       {error ? <ThemedText style={styles.error}>{error}</ThemedText> : null}
+      <Button label="Ask Claude ↗" onPress={() => openUrl(claudeUrl(paper, abstract))} />
     </ThemedView>
   );
 }

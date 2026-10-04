@@ -42,7 +42,7 @@ export type Paper = {
   position: number;
 };
 
-// What the "Heute" card embeds besides title and description.
+// What the "Today" card embeds besides title and description.
 export type TaskKind = 'inbox' | 'backlog' | 'social' | 'inbox_backlog' | 'trending' | 'custom';
 
 export type DayTask = {

@@ -61,7 +61,7 @@ export default function TodayScreen() {
   if (!data) return <ThemedView style={styles.container} />;
   const { today, task, paper, topic, done, streak, links } = data;
   const isDone = done.has(today);
-  const dateLabel = parseKey(today).toLocaleDateString('de-DE', {
+  const dateLabel = parseKey(today).toLocaleDateString('en-GB', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -75,14 +75,14 @@ export default function TodayScreen() {
             <ThemedText type="small" themeColor="textSecondary">
               {dateLabel}
             </ThemedText>
-            <ThemedText style={styles.headline}>Heute</ThemedText>
+            <ThemedText style={styles.headline}>Today</ThemedText>
           </View>
 
           <ThemedView type="backgroundElement" style={styles.streakBox}>
             <View style={styles.streakRow}>
               <ThemedText style={styles.streakNumber}>{streak}</ThemedText>
               <ThemedText themeColor="textSecondary">
-                {streak === 1 ? 'Tag in Folge' : 'Tage in Folge'}
+                day streak
               </ThemedText>
             </View>
             <WeekDots today={today} done={done} />
@@ -95,7 +95,7 @@ export default function TodayScreen() {
                 <ThemedText themeColor="textSecondary">{task.description}</ThemedText>
               ) : null}
               <ThemedText type="small" themeColor="textSecondary">
-                ca. {task.durationMin} Min
+                about {task.durationMin} min
               </ThemedText>
 
               {links.map((l) => (
@@ -107,13 +107,13 @@ export default function TodayScreen() {
                   <PaperCard paper={paper} topic={topic} />
                 ) : (
                   <ThemedText type="small" themeColor="textSecondary">
-                    Der Backlog ist leer.
+                    The backlog is empty.
                   </ThemedText>
                 ))}
             </ThemedView>
           ) : (
             <ThemedView type="backgroundElement" style={styles.card}>
-              <ThemedText style={styles.taskTitle}>Heute frei</ThemedText>
+              <ThemedText style={styles.taskTitle}>Day off</ThemedText>
             </ThemedView>
           )}
 
@@ -121,12 +121,12 @@ export default function TodayScreen() {
             <View style={styles.doneBlock}>
               <View style={[styles.mainButton, { backgroundColor: theme.success }]}>
                 <ThemedText style={[styles.mainButtonText, { color: theme.onAccent }]}>
-                  Erledigt ✓
+                  Done ✓
                 </ThemedText>
               </View>
               <Pressable onPress={() => unmarkDone(db, today)} hitSlop={12}>
                 <ThemedText type="small" themeColor="textSecondary" style={styles.undo}>
-                  Rückgängig
+                  Undo
                 </ThemedText>
               </Pressable>
             </View>
@@ -138,7 +138,7 @@ export default function TodayScreen() {
                 { backgroundColor: theme.accent, opacity: pressed ? 0.7 : 1 },
               ]}>
               <ThemedText style={[styles.mainButtonText, { color: theme.onAccent }]}>
-                Erledigt
+                Done
               </ThemedText>
             </Pressable>
           )}

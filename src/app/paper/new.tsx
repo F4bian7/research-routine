@@ -49,10 +49,10 @@ export default function NewPaperScreen() {
       setStatus('');
       return;
     }
-    setStatus('Suche Titel und Autor:innen …');
+    setStatus('Looking up title and authors …');
     const meta = await fetchMeta(ref).catch(() => null);
     if (!meta) {
-      setStatus('Nichts gefunden, bitte von Hand ausfüllen.');
+      setStatus('Nothing found, please fill in by hand.');
       return;
     }
     setTitle((t) => t || meta.title);
@@ -64,7 +64,7 @@ export default function NewPaperScreen() {
   async function paste() {
     const text = (await readClipboard().catch(() => '')).trim();
     if (!text) {
-      setStatus('Zwischenablage ist leer oder nicht lesbar.');
+      setStatus('Clipboard is empty or not readable.');
       return;
     }
     setLink(text);
@@ -90,22 +90,22 @@ export default function NewPaperScreen() {
       <SafeAreaView edges={['top']} style={styles.container}>
         <View style={[styles.bar, { borderBottomColor: theme.border }]}>
           <Pressable onPress={goBack} hitSlop={12} style={styles.barButton}>
-            <ThemedText style={{ color: theme.accent }}>Abbrechen</ThemedText>
+            <ThemedText style={{ color: theme.accent }}>Cancel</ThemedText>
           </Pressable>
-          <ThemedText type="smallBold">Paper hinzufügen</ThemedText>
+          <ThemedText type="smallBold">Add paper</ThemedText>
           <Pressable
             onPress={save}
             disabled={!title.trim() && !link.trim()}
             hitSlop={12}
             style={styles.barButton}>
-            <ThemedText style={{ color: theme.accent, fontWeight: 700 }}>Sichern</ThemedText>
+            <ThemedText style={{ color: theme.accent, fontWeight: 700 }}>Save</ThemedText>
           </Pressable>
         </View>
 
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <Button label="Link aus Zwischenablage einfügen" variant="primary" onPress={paste} />
+          <Button label="Paste link from clipboard" variant="primary" onPress={paste} />
           <Field
-            label="Link (arXiv, DOI oder URL)"
+            label="Link (arXiv, DOI or URL)"
             value={link}
             onChangeText={setLink}
             onBlur={() => lookup(link)}
@@ -119,12 +119,12 @@ export default function NewPaperScreen() {
               {status}
             </ThemedText>
           ) : null}
-          <Field label="Titel" value={title} onChangeText={setTitle} multiline />
-          <Field label="Autor:innen" value={authors} onChangeText={setAuthors} />
-          <Field label="Jahr" value={year} onChangeText={setYear} keyboardType="number-pad" />
+          <Field label="Title" value={title} onChangeText={setTitle} multiline />
+          <Field label="Authors" value={authors} onChangeText={setAuthors} />
+          <Field label="Year" value={year} onChangeText={setYear} keyboardType="number-pad" />
 
           <ThemedText type="small" themeColor="textSecondary">
-            Thema
+            Topic
           </ThemedText>
           <Row>
             {topics.map((t) => (
@@ -139,7 +139,7 @@ export default function NewPaperScreen() {
           </Row>
 
           <ThemedText type="small" themeColor="textSecondary">
-            Typ
+            Type
           </ThemedText>
           <Row>
             {(Object.keys(PAPER_TYPE_LABEL) as PaperType[]).map((k) => (
@@ -147,7 +147,7 @@ export default function NewPaperScreen() {
             ))}
           </Row>
 
-          <Field label="Notiz" value={note} onChangeText={setNote} multiline />
+          <Field label="Note" value={note} onChangeText={setNote} multiline />
         </ScrollView>
       </SafeAreaView>
     </ThemedView>

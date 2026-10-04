@@ -5,21 +5,21 @@ import type { Summary } from '@/db/types';
 const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 const MAX_CHARS = 60_000; // keeps one request well inside free-tier token limits
 
-const INSTRUCTION = `Du erklärst wissenschaftliche Paper aus der biomedizinischen Technik
-(medizinische Bildanalyse, EEG, MRT) für eine Person mit technischem Studium, die das
-Teilgebiet aber nicht im Detail kennt. Schreibe auf Deutsch, in einfacher, klarer Sprache,
-kurze Sätze, keine Floskeln. Fachbegriffe, die man kennen sollte, kommen in "terms" und werden
-dort in ein bis zwei Sätzen erklärt. Erfinde nichts: was nicht im Text steht, lässt du weg.
+const INSTRUCTION = `You explain scientific papers from biomedical engineering (medical image
+analysis, EEG, MRI) to a reader with an engineering degree who does not know the particular
+subfield in depth. Write in English, in plain and clear language, short sentences, no filler.
+Technical terms worth knowing go into "terms" with a one or two sentence explanation.
+Do not invent anything: leave out what the text does not say.
 
-Antworte nur mit JSON in genau dieser Form:
+Answer only with JSON of exactly this shape:
 {
-  "short": "2 bis 3 Sätze: worum geht es und was ist das Ergebnis",
-  "problem": "Welches Problem wird gelöst und warum ist es schwierig",
-  "method": "Wie gehen die Autor:innen vor, ohne Formeln",
-  "result": "Was kam heraus, mit den wichtigsten Zahlen",
-  "relevance": "Warum ist das für das Feld wichtig",
-  "limits": "Grenzen und offene Fragen",
-  "terms": [{ "term": "Begriff", "explanation": "Erklärung" }]
+  "short": "2 to 3 sentences: what the paper is about and what it found",
+  "problem": "Which problem is solved and why it is hard",
+  "method": "How the authors approach it, without formulas",
+  "result": "What came out, with the key numbers",
+  "relevance": "Why it matters for the field",
+  "limits": "Limitations and open questions",
+  "terms": [{ "term": "term", "explanation": "explanation" }]
 }`;
 
 export class GeminiError extends Error {
@@ -65,7 +65,7 @@ export async function summarize(
     contents: [
       {
         role: 'user',
-        parts: [{ text: `Titel: ${paper.title}\n\n${paper.text.slice(0, MAX_CHARS)}` }],
+        parts: [{ text: `Title: ${paper.title}\n\n${paper.text.slice(0, MAX_CHARS)}` }],
       },
     ],
     generationConfig: { responseMimeType: 'application/json', temperature: 0.3 },
@@ -80,11 +80,11 @@ export async function summarize(
     throw new GeminiError(data.error?.message ?? `HTTP ${res.status}`, res.status);
   }
   const text = (data.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join('');
-  if (!text) throw new GeminiError('Leere Antwort von Gemini.');
+  if (!text) throw new GeminiError('Empty answer from Gemini.');
   try {
     return parseSummary(text);
   } catch {
-    throw new GeminiError('Gemini hat kein gültiges JSON geliefert.');
+    throw new GeminiError('Gemini did not return valid JSON.');
   }
 }
 
@@ -99,16 +99,16 @@ export async function checkKey(apiKey: string, model: string): Promise<void> {
   }
 }
 
-// Short German hint for the errors a user can fix.
+// Short hint for the errors a user can fix.
 export function explainError(e: unknown): string {
   if (e instanceof GeminiError) {
-    if (e.status === 400 && /api key/i.test(e.message)) return 'Der API-Key ist ungültig.';
-    if (e.status === 403) return 'Der API-Key hat keinen Zugriff. Key in den Einstellungen prüfen.';
-    if (e.status === 404) return 'Das Modell gibt es nicht. Modellname in den Einstellungen prüfen.';
-    if (e.status === 429) return 'Tageslimit der Gratis-Stufe erreicht. Später nochmal versuchen.';
+    if (e.status === 400 && /api key/i.test(e.message)) return 'The API key is not valid.';
+    if (e.status === 403) return 'The API key has no access. Check the key in the settings.';
+    if (e.status === 404) return 'This model does not exist. Check the model name in the settings.';
+    if (e.status === 429) return 'Free tier limit reached. Try again later.';
     return `Gemini: ${e.message}`;
   }
-  return 'Keine Verbindung zu Gemini. Bist du online?';
+  return 'Could not reach Gemini. Are you online?';
 }
 
 export { parseSummary as _parseSummaryForTests };

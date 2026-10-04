@@ -18,6 +18,8 @@ It ships as an installable web app (PWA) on GitHub Pages:
 | In-app reader (abstract, figures, conclusion, full text for arXiv) | done |
 | In-app feeds: new papers (PubMed, arXiv via OpenAlex), Bluesky, HF trending | next |
 | Plain-language summaries (Gemini free tier, own key in settings) | done |
+| "Ask Claude": hands the paper to a claude.ai chat for follow-up questions | done |
+| English UI | done |
 | Tab "Themen und Personen" | open |
 | Tab "Einstellungen" (routine, reminder, quick links, JSON export/import) | open |
 
