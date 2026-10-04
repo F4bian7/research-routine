@@ -10,6 +10,10 @@ Write in English, plainly, in short sentences.`;
 
 const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
 
+// The app renders LaTeX; this keeps formulas in a form it can find.
+const FORMULAS = `Write every formula in LaTeX: inline between $ and $, a formula on its own line
+between $$ and $$. In the JSON, escape each backslash (write \\\\frac, not \\frac).`;
+
 // The learner's own aim for a topic (for example a thesis), so explanations can point
 // to where an idea will matter for them.
 function goalLine(goal?: string) {
@@ -127,7 +131,8 @@ export function parseLesson(text: string): LessonContent {
   };
 }
 
-const LESSON_SHAPE = `Answer only with JSON:
+const LESSON_SHAPE = `${FORMULAS}
+Answer only with JSON:
 {
   "body": "the explanation; '## ' starts a short heading, '- ' a bullet, blank lines between paragraphs",
   "keyPoints": ["3 short takeaways"],

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { MathText } from '@/components/math-text';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button, Field } from '@/components/ui';
@@ -17,22 +18,9 @@ const KIND_LABEL: Record<LessonKind, string> = {
   question: 'Your question',
 };
 
-// **bold** inside a line.
+// A line with **bold** and formulas.
 function Inline({ text, style }: { text: string; style?: object }) {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
-  return (
-    <ThemedText style={style}>
-      {parts.map((p, i) =>
-        p.startsWith('**') && p.endsWith('**') ? (
-          <ThemedText key={i} style={[style, styles.bold]}>
-            {p.slice(2, -2)}
-          </ThemedText>
-        ) : (
-          p
-        )
-      )}
-    </ThemedText>
-  );
+  return <MathText text={text} style={style} />;
 }
 
 // The lesson text: "## " headings, "- " bullets, paragraphs.
@@ -48,9 +36,7 @@ function RichText({ body }: { body: string }) {
         const t = b.trim();
         if (t.startsWith('## ')) {
           return (
-            <ThemedText key={i} style={styles.heading}>
-              {t.slice(3)}
-            </ThemedText>
+            <Inline key={i} text={t.slice(3)} style={styles.heading} />
           );
         }
         if (t.split('\n').every((l) => /^[-•*] /.test(l.trim()))) {
@@ -80,7 +66,7 @@ export function LessonBody({ lesson, topic }: { lesson: Lesson; topic?: Topic | 
             .join(' · ')}
         </ThemedText>
       </View>
-      <ThemedText style={styles.title}>{lesson.title}</ThemedText>
+      <Inline text={lesson.title} style={styles.title} />
       {content ? <RichText body={content.body} /> : null}
       {content && content.keyPoints.length > 0 && (
         <ThemedView type="backgroundElement" style={styles.points}>
@@ -100,7 +86,7 @@ export function QuizView({ quiz, onAnswer }: { quiz: Quiz; onAnswer: (right: boo
   const [picked, setPicked] = useState<number | null>(null);
   return (
     <View style={styles.box}>
-      <ThemedText style={styles.question}>{quiz.question}</ThemedText>
+      <Inline text={quiz.question} style={styles.question} />
       {quiz.options.map((o, i) => {
         const answered = picked !== null;
         const right = i === quiz.answer;
@@ -114,16 +100,14 @@ export function QuizView({ quiz, onAnswer }: { quiz: Quiz; onAnswer: (right: boo
               onAnswer(i === quiz.answer);
             }}
             style={({ pressed }) => [styles.option, { borderColor: color, opacity: pressed ? 0.6 : 1 }]}>
-            <ThemedText>{o}</ThemedText>
+            <Inline text={o} />
           </Pressable>
         );
       })}
       {picked !== null && (
         <ThemedText style={{ color: picked === quiz.answer ? theme.success : '#D93F3F', fontWeight: 700 }}>
           {picked === quiz.answer ? 'Right!' : 'Not quite.'}{' '}
-          <ThemedText themeColor="text" style={styles.normal}>
-            {quiz.explanation}
-          </ThemedText>
+          <Inline text={quiz.explanation} style={styles.normal} />
         </ThemedText>
       )}
     </View>

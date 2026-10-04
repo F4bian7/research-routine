@@ -1,4 +1,5 @@
 import type { Summary } from '@/db/types';
+import { repairJsonEscapes } from '@/domain/math';
 
 // Plain-language summaries via the Gemini API (free tier, key from Google AI Studio).
 // Called straight from the device; the key never leaves it except in this request.
@@ -228,7 +229,12 @@ export async function generateJson<T>(
     try {
       return parse(extractJson(text));
     } catch {
-      throw new GeminiError(`Gemini's answer could not be read: ${text.slice(0, 120)}`);
+      // Formulas often arrive with unescaped backslashes ("\alpha"); repair and retry.
+      try {
+        return parse(repairJsonEscapes(extractJson(text)));
+      } catch {
+        throw new GeminiError(`Gemini's answer could not be read: ${text.slice(0, 120)}`);
+      }
     }
   };
 

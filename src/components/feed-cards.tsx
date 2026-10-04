@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 
 import { openUrl } from '@/components/link-button';
+import { MathText } from '@/components/math-text';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Chip, Row } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
@@ -53,14 +54,14 @@ export function BriefBox({ brief, input }: { brief?: Brief; input: BriefInput })
         {'●'.repeat(brief.score)}
         {'○'.repeat(5 - brief.score)} {SCORE_LABEL[brief.score]} for you
       </ThemedText>
-      <ThemedText>{brief.gist}</ThemedText>
+      <MathText text={brief.gist} />
       {brief.why ? (
         <ThemedText type="small" themeColor="textSecondary">
           Why it matters: {brief.why}
         </ThemedText>
       ) : null}
       {more ? (
-        <ThemedText type="small">{more}</ThemedText>
+        <MathText text={more} style={styles.small} />
       ) : (
         <Pressable
           disabled={busy}
@@ -359,5 +360,6 @@ const styles = StyleSheet.create({
   message: { gap: Spacing.two, paddingVertical: Spacing.three },
   timeline: { gap: Spacing.two },
   brief: { borderLeftWidth: 3, paddingLeft: Spacing.two, gap: Spacing.one },
+  small: { fontSize: 14, lineHeight: 20 },
   initials: { alignItems: 'center', justifyContent: 'center' },
 });

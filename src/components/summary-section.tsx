@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { openUrl } from '@/components/link-button';
+import { MathText } from '@/components/math-text';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui';
@@ -80,11 +81,11 @@ export function SummarySection({
 
       {summary ? (
         <>
-          <ThemedText>{summary.short}</ThemedText>
+          <MathText text={summary.short} />
           {PARTS.filter((p) => summary[p.key]).map((p) => (
             <View key={p.key} style={styles.part}>
               <ThemedText type="smallBold">{p.label}</ThemedText>
-              <ThemedText>{summary[p.key]}</ThemedText>
+              <MathText text={summary[p.key]} />
             </View>
           ))}
           {summary.terms.length > 0 && (
