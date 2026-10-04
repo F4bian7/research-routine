@@ -174,9 +174,19 @@ export default function LearnScreen() {
 
           {nothing && (
             <>
-              <ThemedText style={styles.big}>Nothing to learn yet</ThemedText>
+              <ThemedText style={styles.big}>
+                {lesson.state === 'error' ? 'The lesson could not be written' : 'Nothing to learn yet'}
+              </ThemedText>
+              {lesson.state === 'error' ? (
+                <>
+                  <ThemedText>{lesson.message}</ThemedText>
+                  <Button label="Try again" variant="primary" onPress={() => router.replace('/learn')} />
+                </>
+              ) : null}
               <ThemedText themeColor="textSecondary">
-                {hasKey
+                {lesson.state === 'error'
+                  ? 'If it keeps failing, open Settings and tap "Test key"; the app then looks for a Gemini model that works with your key.'
+                  : hasKey
                   ? 'Plan a course for a topic in Brain → Cards, or turn notes and papers into flashcards.'
                   : 'Daily lessons are written by Gemini: add the free key in Settings. Flashcards from your notes work without it.'}
               </ThemedText>

@@ -9,9 +9,10 @@ import {
   markLessonDone,
   saveLessonContent,
 } from '@/db/repos/lessons';
-import { getSettings } from '@/db/repos/settings';
+import { getSettings, setSetting } from '@/db/repos/settings';
 import { listTopics } from '@/db/repos/topics';
 import type { Card, Lesson, Topic } from '@/db/types';
+import type { Gemini } from '@/sources/gemini';
 import { makeLesson, makeSyllabus } from '@/sources/learning';
 
 export const MAX_REVIEWS = 15;
@@ -19,9 +20,16 @@ export const MAX_NEW_CARDS = 5;
 
 export const XP = { lesson: 10, quizRight: 5, card: 2 };
 
-export async function getGemini(db: Db) {
+// Key and model from Settings; a model that turns out to work in place of the chosen
+// one is saved, so the next request goes there directly.
+export async function getGemini(db: Db): Promise<Gemini | null> {
   const s = await getSettings(db);
-  return s.geminiApiKey ? { apiKey: s.geminiApiKey, model: s.geminiModel } : null;
+  if (!s.geminiApiKey) return null;
+  return {
+    apiKey: s.geminiApiKey,
+    model: s.geminiModel,
+    onModel: (model) => void setSetting(db, 'geminiModel', model),
+  };
 }
 
 // The topic whose course has moved least recently, so topics take turns. Without

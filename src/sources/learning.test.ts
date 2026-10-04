@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { parseLesson, parseSyllabus } from './learning';
+import { _parseCardListForTests as parseCardList, parseLesson, parseSyllabus } from './learning';
 
 test('syllabus keeps lessons with a title', () => {
   const s = parseSyllabus('{"lessons":[{"title":"k-space","outline":"What it is"},{"title":""}]}');
@@ -29,4 +29,14 @@ test('a quiz whose answer is out of range is rejected', () => {
   assert.throws(() =>
     parseLesson(JSON.stringify({ body: 'x', quiz: { question: 'Q', options: ['a', 'b'], answer: 5 } }))
   );
+});
+
+test('loose shapes from the model are accepted', () => {
+  assert.equal(parseSyllabus('[{"title":"A"}]').length, 1);
+  assert.deepEqual(parseCardList('{"flashcards":[{"question":"Q","answer":"A"}]}'), [{ front: 'Q', back: 'A' }]);
+  assert.deepEqual(parseCardList('[{"front":"F","back":"B"}]'), [{ front: 'F', back: 'B' }]);
+  const l = parseLesson(JSON.stringify({ body: 'x', quiz: { question: 'Q', choices: ['a', 'b', 'c'], correct: 'B' } }));
+  assert.equal(l.quiz.answer, 1);
+  const l2 = parseLesson(JSON.stringify({ body: 'x', quiz: { question: 'Q', options: ['a', 'b'], answer: 'b' } }));
+  assert.equal(l2.quiz.answer, 1);
 });

@@ -1,10 +1,8 @@
 import type { LessonContent, Quiz } from '@/db/types';
-import { generateJson } from './gemini';
+import { type Gemini, generateJson } from './gemini';
 
 // Gemini prompts for the Learn part: a fundamentals syllabus per topic, one lesson
 // at a time, and flashcards drafted from papers and notes.
-
-type Gemini = { apiKey: string; model: string };
 
 const AUDIENCE = `The learner studies biomedical engineering (medical image analysis with deep
 learning, EEG, MRI) and wants to understand the field well enough to read current research.
@@ -16,9 +14,18 @@ const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
 
 export type SyllabusItem = { title: string; outline: string };
 
+// Models do not always keep to the requested shape: accept a bare list, other key
+// names, and answers given as letters or as the option text.
+function listIn(raw: unknown, keys: string[]): unknown[] {
+  if (Array.isArray(raw)) return raw;
+  const obj = (raw ?? {}) as Record<string, unknown>;
+  for (const k of keys) if (Array.isArray(obj[k])) return obj[k] as unknown[];
+  const firstList = Object.values(obj).find(Array.isArray);
+  return (firstList as unknown[]) ?? [];
+}
+
 export function parseSyllabus(text: string): SyllabusItem[] {
-  const raw = JSON.parse(text) as { lessons?: unknown[] };
-  const items = (raw.lessons ?? [])
+  const items = listIn(JSON.parse(text), ['lessons', 'syllabus', 'items'])
     .map((l) => l as { title?: unknown; outline?: unknown })
     .map((l) => ({ title: str(l.title), outline: str(l.outline) }))
     .filter((l) => l.title);
@@ -39,9 +46,24 @@ Answer only with JSON: { "lessons": [ { "title": "...", "outline": "one sentence
 // ---- Lesson -----------------------------------------------------------------
 
 function parseQuiz(q: unknown): Quiz {
-  const r = (q ?? {}) as { question?: unknown; options?: unknown[]; answer?: unknown; explanation?: unknown };
-  const options = (r.options ?? []).map(str).filter(Boolean);
-  const answer = typeof r.answer === 'number' ? r.answer : Number(r.answer);
+  const r = (q ?? {}) as {
+    question?: unknown;
+    options?: unknown[];
+    choices?: unknown[];
+    answer?: unknown;
+    correct?: unknown;
+    explanation?: unknown;
+  };
+  const options = (r.options ?? r.choices ?? [])
+    .map((o) => (typeof o === 'string' ? o : str((o as { text?: unknown })?.text)))
+    .map(str)
+    .filter(Boolean);
+  const given = r.answer ?? r.correct;
+  let answer = typeof given === 'number' ? given : Number(given);
+  if (Number.isNaN(answer) && typeof given === 'string') {
+    const letter = given.trim().match(/^([A-Da-d])[).:]?$/)?.[1];
+    answer = letter ? letter.toUpperCase().charCodeAt(0) - 65 : options.findIndex((o) => o === given.trim());
+  }
   if (!str(r.question) || options.length < 2 || !(answer >= 0 && answer < options.length)) {
     throw new Error('bad quiz');
   }
@@ -50,10 +72,12 @@ function parseQuiz(q: unknown): Quiz {
 
 export function parseCards(list: unknown): { front: string; back: string }[] {
   return (Array.isArray(list) ? list : [])
-    .map((c) => c as { front?: unknown; back?: unknown })
-    .map((c) => ({ front: str(c.front), back: str(c.back) }))
+    .map((c) => c as { front?: unknown; back?: unknown; question?: unknown; answer?: unknown })
+    .map((c) => ({ front: str(c.front ?? c.question), back: str(c.back ?? c.answer) }))
     .filter((c) => c.front && c.back);
 }
+
+export { parseCardList as _parseCardListForTests };
 
 export function parseLesson(text: string): LessonContent {
   const raw = JSON.parse(text) as { body?: unknown; keyPoints?: unknown[]; quiz?: unknown; cards?: unknown };
@@ -101,8 +125,7 @@ Answer only with JSON:
 // ---- Cards from papers and notes ----------------------------------------------
 
 function parseCardList(text: string) {
-  const raw = JSON.parse(text) as { cards?: unknown };
-  const cards = parseCards(raw.cards);
+  const cards = parseCards(listIn(JSON.parse(text), ['cards', 'flashcards']));
   if (cards.length === 0) throw new Error('no cards');
   return cards;
 }

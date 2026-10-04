@@ -31,14 +31,18 @@ export class GeminiError extends Error {
   }
 }
 
+// Key, model, and a callback that remembers a model found to work when the chosen
+// one is not available (for example no free quota for it).
+export type Gemini = { apiKey: string; model: string; onModel?: (model: string) => void };
+
 type GenerateResponse = {
-  candidates?: { content?: { parts?: { text?: string }[] } }[];
+  candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] }; finishReason?: string }[];
+  promptFeedback?: { blockReason?: string };
   error?: { message?: string; status?: string };
 };
 
 function parseSummary(text: string): Summary {
-  const json = text.replace(/^```(?:json)?\s*|\s*```$/g, '');
-  const raw = JSON.parse(json) as Partial<Summary>;
+  const raw = JSON.parse(text) as Partial<Summary>;
   const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
   return {
     short: str(raw.short),
@@ -55,9 +59,73 @@ function parseSummary(text: string): Summary {
   };
 }
 
-// One JSON request to Gemini; `parse` turns the text into the wanted shape.
+// The JSON inside a model answer, also when it comes in a code fence or with words around.
+export function extractJson(text: string): string {
+  const t = text.trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
+  if (/^[[{]/.test(t)) return t;
+  const start = t.search(/[[{]/);
+  const end = Math.max(t.lastIndexOf('}'), t.lastIndexOf(']'));
+  return start >= 0 && end > start ? t.slice(start, end + 1) : t;
+}
+
+async function callModel(apiKey: string, model: string, body: unknown): Promise<string> {
+  let res: Response;
+  try {
+    res = await fetch(`${ENDPOINT}/${encodeURIComponent(model)}:generateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new GeminiError('Could not reach Gemini. Are you online?');
+  }
+  const data = (await res.json().catch(() => ({}))) as GenerateResponse;
+  if (!res.ok) throw new GeminiError(data.error?.message ?? `HTTP ${res.status}`, res.status);
+  const candidate = data.candidates?.[0];
+  // Thinking models may send their thoughts as extra parts; only the answer counts.
+  const text = (candidate?.content?.parts ?? [])
+    .filter((p) => !p.thought)
+    .map((p) => p.text ?? '')
+    .join('');
+  if (!text) {
+    const why = data.promptFeedback?.blockReason ?? candidate?.finishReason ?? 'no text';
+    throw new GeminiError(`Gemini returned no answer (${why}).`);
+  }
+  return text;
+}
+
+// Models of the key that can generate text, newest Flash first, Flash-Lite after.
+export async function listModels(apiKey: string): Promise<string[]> {
+  const res = await fetch(`${ENDPOINT}?pageSize=200`, { headers: { 'x-goog-api-key': apiKey } });
+  if (!res.ok) return [];
+  const data = (await res.json()) as {
+    models?: { name: string; supportedGenerationMethods?: string[] }[];
+  };
+  const version = (n: string) => Number(n.match(/gemini-(\d+(?:\.\d+)?)/)?.[1] ?? 0);
+  return (data.models ?? [])
+    .filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
+    .map((m) => m.name.replace(/^models\//, ''))
+    .filter((n) => /^gemini-.*flash/.test(n) && !/(tts|image|audio|live|preview-\d{2}-\d{2}|exp)/.test(n))
+    .sort((a, b) => {
+      const lite = Number(a.includes('lite')) - Number(b.includes('lite'));
+      return lite !== 0 ? lite : version(b) - version(a);
+    });
+}
+
+// Errors that another model may not have: unknown model, or no (free) quota for it.
+function tryAnotherModel(e: unknown) {
+  if (!(e instanceof GeminiError)) return false;
+  if (e.status === 404) return true;
+  if (e.status === 429 && /limit: ?0\b|free.?tier|quota/i.test(e.message)) return true;
+  if (e.status === 400 && /not (supported|found)|unsupported/i.test(e.message)) return true;
+  return false;
+}
+
+// One JSON request to Gemini; `parse` turns the answer into the wanted shape. If the
+// chosen model is not available to the key, other Flash models are tried and the one
+// that works is remembered.
 export async function generateJson<T>(
-  gemini: { apiKey: string; model: string },
+  gemini: Gemini,
   instruction: string,
   input: string,
   parse: (text: string) => T,
@@ -68,51 +136,62 @@ export async function generateJson<T>(
     contents: [{ role: 'user', parts: [{ text: input.slice(0, MAX_CHARS) }] }],
     generationConfig: { responseMimeType: 'application/json', temperature },
   };
-  const res = await fetch(`${ENDPOINT}/${encodeURIComponent(gemini.model)}:generateContent`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': gemini.apiKey },
-    body: JSON.stringify(body),
-  });
-  const data = (await res.json().catch(() => ({}))) as GenerateResponse;
-  if (!res.ok) {
-    throw new GeminiError(data.error?.message ?? `HTTP ${res.status}`, res.status);
-  }
-  const text = (data.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join('');
-  if (!text) throw new GeminiError('Empty answer from Gemini.');
+  const run = async (model: string) => {
+    const text = await callModel(gemini.apiKey, model, body);
+    try {
+      return parse(extractJson(text));
+    } catch {
+      throw new GeminiError(`Gemini's answer could not be read: ${text.slice(0, 120)}`);
+    }
+  };
   try {
-    return parse(text.replace(/^```(?:json)?\s*|\s*```$/g, ''));
-  } catch {
-    throw new GeminiError('Gemini did not return valid JSON.');
+    return await run(gemini.model);
+  } catch (e) {
+    if (!tryAnotherModel(e)) throw e;
+    const others = (await listModels(gemini.apiKey)).filter((m) => m !== gemini.model).slice(0, 4);
+    for (const model of others) {
+      try {
+        const out = await run(model);
+        gemini.onModel?.(model);
+        return out;
+      } catch (e2) {
+        if (!tryAnotherModel(e2)) throw e2;
+      }
+    }
+    throw e;
   }
 }
 
-export async function summarize(
-  apiKey: string,
-  model: string,
-  paper: { title: string; text: string }
-): Promise<Summary> {
-  return generateJson({ apiKey, model }, INSTRUCTION, `Title: ${paper.title}\n\n${paper.text}`, parseSummary);
+export async function summarize(g: Gemini, paper: { title: string; text: string }): Promise<Summary> {
+  return generateJson(g, INSTRUCTION, `Title: ${paper.title}\n\n${paper.text}`, parseSummary);
 }
 
-// Cheap check that key and model work: fetches the model description, no generation.
-export async function checkKey(apiKey: string, model: string): Promise<void> {
-  const res = await fetch(`${ENDPOINT}/${encodeURIComponent(model)}`, {
-    headers: { 'x-goog-api-key': apiKey },
-  });
-  if (!res.ok) {
-    const data = (await res.json().catch(() => ({}))) as GenerateResponse;
-    throw new GeminiError(data.error?.message ?? `HTTP ${res.status}`, res.status);
-  }
+// A real, tiny request: proves key, model and quota. Returns the model that answered.
+export async function testGemini(g: Gemini): Promise<string> {
+  let used = g.model;
+  await generateJson(
+    { ...g, onModel: (m) => { used = m; g.onModel?.(m); } },
+    'Answer only with JSON: {"ok": true}',
+    'Say ok.',
+    (t) => {
+      if ((JSON.parse(t) as { ok?: unknown }).ok !== true) throw new Error('unexpected');
+      return true;
+    },
+    0
+  );
+  return used;
 }
 
-// Short hint for the errors a user can fix.
+// A short hint for what the user can do, with Google's own words when they help.
 export function explainError(e: unknown): string {
   if (e instanceof GeminiError) {
-    if (e.status === 400 && /api key/i.test(e.message)) return 'The API key is not valid.';
-    if (e.status === 403) return 'The API key has no access. Check the key in the settings.';
-    if (e.status === 404) return 'This model does not exist. Check the model name in the settings.';
-    if (e.status === 429) return 'Free tier limit reached. Try again later.';
-    return `Gemini: ${e.message}`;
+    const google = e.message.length > 160 ? `${e.message.slice(0, 157)}…` : e.message;
+    if (e.status === 400 && /api key/i.test(e.message)) return 'The API key is not valid. Copy it again from Google AI Studio.';
+    if (e.status === 403) return `The API key has no access (${google}).`;
+    if (e.status === 404) return `Model not found. Pick another one in Settings. (${google})`;
+    if (e.status === 429) return `Gemini says the quota is used up. Try again in a minute, or tomorrow if it is the daily limit. (${google})`;
+    if (e.status && e.status >= 500) return 'Gemini is busy or down right now. Try again in a minute.';
+    return google;
   }
   return 'Could not reach Gemini. Are you online?';
 }

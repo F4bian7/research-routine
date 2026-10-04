@@ -13,6 +13,7 @@ import { getSettings } from '@/db/repos/settings';
 import { getSummary, saveSummary } from '@/db/repos/summaries';
 import type { Paper } from '@/db/types';
 import { claudeUrl } from '@/sources/claude';
+import { getGemini } from '@/data/learn';
 import { explainError, summarize } from '@/sources/gemini';
 
 const PARTS: { key: 'problem' | 'method' | 'result' | 'relevance' | 'limits'; label: string }[] = [
@@ -47,15 +48,14 @@ export function SummarySection({
   const { settings, summary } = data;
 
   async function run() {
-    if (!settings.geminiApiKey) return;
+    const g = await getGemini(db);
+    if (!g) return;
     setBusy(true);
     setError('');
     try {
-      const s = await summarize(settings.geminiApiKey, settings.geminiModel, {
-        title: paper.title,
-        text,
-      });
-      await saveSummary(db, paper.id, s, settings.geminiModel);
+      let model = g.model;
+      const s = await summarize({ ...g, onModel: (m) => ((model = m), g.onModel?.(m)) }, { title: paper.title, text });
+      await saveSummary(db, paper.id, s, model);
     } catch (e) {
       setError(explainError(e));
     } finally {

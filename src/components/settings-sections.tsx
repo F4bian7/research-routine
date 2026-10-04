@@ -19,7 +19,7 @@ import { todayKey, WEEKDAY_LONG, WEEKDAY_SHORT } from '@/domain/dates';
 import { blueskyHandle } from '@/domain/person-links';
 import { parseTime, reminderIcs } from '@/domain/reminder';
 import { useTheme } from '@/hooks/use-theme';
-import { checkKey, explainError } from '@/sources/gemini';
+import { explainError, testGemini } from '@/sources/gemini';
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -259,10 +259,22 @@ export function GeminiSection({ settings }: { settings: Settings }) {
   async function test() {
     await save();
     if (!key.trim()) return setStatus('Enter a key first.');
-    setStatus('Checking …');
+    setStatus('Asking Gemini …');
     try {
-      await checkKey(key.trim(), model.trim() || DEFAULT_SETTINGS.geminiModel);
-      setStatus('Works.');
+      const chosen = model.trim() || DEFAULT_SETTINGS.geminiModel;
+      const used = await testGemini({
+        apiKey: key.trim(),
+        model: chosen,
+        onModel: (m) => {
+          setModel(m);
+          setSetting(db, 'geminiModel', m);
+        },
+      });
+      setStatus(
+        used === chosen
+          ? `Works with ${used}.`
+          : `${chosen} is not available for this key; switched to ${used}, which works.`
+      );
     } catch (e) {
       setStatus(explainError(e));
     }
