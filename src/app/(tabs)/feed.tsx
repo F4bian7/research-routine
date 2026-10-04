@@ -8,8 +8,11 @@ import {
   bskyKey,
   FeedMessage,
   FeedPaperCard,
+  paperInput,
+  postInput,
   TimelineCard,
   WebCard,
+  webInput,
 } from '@/components/feed-cards';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -17,13 +20,21 @@ import { Button, Chip, Row } from '@/components/ui';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { type Highlights, loadBluesky, loadHighlights, loadNewPapers, NEW_PAPERS_DAYS } from '@/data/feeds';
 import { openAlexHint } from '@/sources/openalex-client';
-import { checkDuePeople, loadTimeline, peopleKey, type Timeline } from '@/data/people';
+import {
+  checkDuePeople,
+  loadTimeline,
+  peopleKey,
+  type Timeline,
+  type TimelineItem,
+} from '@/data/people';
+import { byScore, useBriefs } from '@/data/use-briefs';
 import { useQuery } from '@/data/use-query';
 import { type Db, useDb } from '@/db/db';
 import { type FeedDecision, getFeedDecisions } from '@/db/repos/feed';
 import { listPeople } from '@/db/repos/people';
 import { getSettings } from '@/db/repos/settings';
 import { listTopics } from '@/db/repos/topics';
+import type { Brief, BriefInput } from '@/sources/briefs';
 import type { BlueskyPost, FeedPaper } from '@/sources/feed-types';
 
 // 'trending' is kept as an alias: older links (Today card) open Highlights → AI.
@@ -143,6 +154,41 @@ export default function FeedScreen() {
       ? { state: 'done', items: current.posts }
       : { state: 'error' };
 
+  // What is on screen, for the plain-language briefs and the "For you" order.
+  const hasKey = !!ctx?.settings.geminiApiKey;
+  const [order, setOrder] = useState<'forYou' | 'newest'>('forYou');
+  const shownPapers =
+    current?.ok && ctx && tab === 'new'
+      ? current.papers.filter(
+          (p) => ctx.decisions.get(p.id) !== 'down' && (topicId === null || p.topicId === topicId)
+        )
+      : [];
+  const h = current?.ok ? current.highlights : undefined;
+  const timelineItems = current?.ok && current.timeline ? current.timeline.items : [];
+  const inputs: BriefInput[] =
+    tab === 'new'
+      ? shownPapers.map(paperInput)
+      : tab === 'people'
+        ? timelineItems.map(timelineInput)
+        : tab === 'bluesky'
+          ? (current?.ok ? current.posts : []).map(postInput)
+          : h
+            ? sub === 'news'
+              ? h.news.map(postInput)
+              : sub === 'hn'
+                ? h.hn.map(webInput)
+                : (sub === 'ai' ? h.ai : h.papers).map(paperInput)
+            : [];
+  const { briefs, pending, error: briefError } = useBriefs(inputs, hasKey);
+  // "For you" puts the best first and folds away what Gemini rated 1 or 2.
+  const [showLow, setShowLow] = useState(false);
+  const isLow = (id: string) => (briefs.get(id)?.score ?? 3) <= 2;
+  const lowCount = order === 'forYou' && !showLow ? inputs.filter((i) => isLow(i.id)).length : 0;
+  const sorted = <T,>(list: T[], id: (t: T) => string) =>
+    order === 'forYou'
+      ? byScore(showLow ? list : list.filter((x) => !isLow(id(x))), id, briefs)
+      : list;
+
   if (!ctx) return <ThemedView style={styles.container} />;
   const { topics, decisions } = ctx;
   const topicOf = (id: number | null) => topics.find((t) => t.id === id);
@@ -226,13 +272,38 @@ export default function FeedScreen() {
             </ThemedText>
           )}
 
+          {hasKey ? (
+            <View style={styles.orderRow}>
+              <Row>
+                <Chip label="For you" selected={order === 'forYou'} onPress={() => setOrder('forYou')} />
+                <Chip label="Newest" selected={order === 'newest'} onPress={() => setOrder('newest')} />
+              </Row>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.flex}>
+                {pending
+                  ? 'Gemini is reading and rating …'
+                  : briefError || 'Rated for you, with plain-language summaries.'}
+              </ThemedText>
+            </View>
+          ) : (
+            <ThemedText type="small" themeColor="textSecondary">
+              Add the free Gemini key in Settings to get every item explained in plain words and
+              rated for you.
+            </ThemedText>
+          )}
+
           {tab === 'highlights' ? (
             !current ? (
               <FeedMessage text="Loading …" />
             ) : !current.ok ? (
               <FeedMessage text={current.message} onRetry={refresh} />
             ) : (
-              <HighlightList h={current.highlights!} sub={sub} decisions={decisions} />
+              <HighlightList
+                h={current.highlights!}
+                sub={sub}
+                decisions={decisions}
+                briefs={briefs}
+                sorted={sorted}
+              />
             )
           ) : tab === 'people' ? (
             ctx.people.length === 0 ? (
@@ -244,9 +315,10 @@ export default function FeedScreen() {
             ) : !current.timeline || current.timeline.items.length === 0 ? (
               <FeedMessage text="Nothing new from the people you follow." />
             ) : (
-              current.timeline.items
-                .filter((i) => i.kind !== 'paper' || decisions.get(i.paper.id) !== 'down')
-                .map((i) => (
+              sorted(
+                current.timeline.items.filter((i) => i.kind !== 'paper' || decisions.get(i.paper.id) !== 'down'),
+                (i) => timelineInput(i).id
+              ).map((i) => (
                   <TimelineCard
                     key={
                       i.kind === 'post'
@@ -258,6 +330,7 @@ export default function FeedScreen() {
                     item={i}
                     avatar={current.timeline!.avatars.get(String(i.person.id))}
                     decisions={decisions}
+                    brief={briefs.get(timelineInput(i).id)}
                   />
                 ))
             )
@@ -269,8 +342,13 @@ export default function FeedScreen() {
             ) : posts.items.length === 0 ? (
               <FeedMessage text="No posts found." />
             ) : (
-              posts.items.map((p) => (
-                <BlueskyPostCard key={p.uri} post={p} saved={decisions.get(bskyKey(p)) === 'saved'} />
+              sorted(posts.items, bskyKey).map((p) => (
+                <BlueskyPostCard
+                  key={p.uri}
+                  post={p}
+                  saved={decisions.get(bskyKey(p)) === 'saved'}
+                  brief={briefs.get(bskyKey(p))}
+                />
               ))
             )
           ) : papers.state === 'loading' ? (
@@ -286,14 +364,22 @@ export default function FeedScreen() {
               }
             />
           ) : (
-            visiblePapers.map((p) => (
+            sorted(visiblePapers, (p) => p.id).map((p) => (
               <FeedPaperCard
                 key={p.id}
                 paper={p}
                 topic={topicOf(p.topicId)}
                 decision={decisions.get(p.id)}
+                brief={briefs.get(p.id)}
               />
             ))
+          )}
+          {lowCount > 0 && (
+            <Button
+              label={`Show ${lowCount} ${lowCount === 1 ? 'item' : 'items'} rated low for you`}
+              variant="ghost"
+              onPress={() => setShowLow(true)}
+            />
           )}
         </ScrollView>
       </SafeAreaView>
@@ -305,16 +391,25 @@ function HighlightList({
   h,
   sub,
   decisions,
+  briefs,
+  sorted,
 }: {
   h: Highlights;
   sub: HighlightView;
   decisions: Map<string, FeedDecision>;
+  briefs: Map<string, Brief>;
+  sorted: <T>(list: T[], id: (t: T) => string) => T[];
 }) {
   if (sub === 'news') {
     return h.news.length ? (
       <>
-        {h.news.map((p) => (
-          <BlueskyPostCard key={p.uri} post={p} saved={decisions.get(bskyKey(p)) === 'saved'} />
+        {sorted(h.news, bskyKey).map((p) => (
+          <BlueskyPostCard
+            key={p.uri}
+            post={p}
+            saved={decisions.get(bskyKey(p)) === 'saved'}
+            brief={briefs.get(bskyKey(p))}
+          />
         ))}
       </>
     ) : (
@@ -324,24 +419,31 @@ function HighlightList({
   if (sub === 'hn') {
     return h.hn.length ? (
       <>
-        {h.hn.map((i) => (
-          <WebCard key={i.id} item={i} />
+        {sorted(h.hn, (i) => i.id).map((i) => (
+          <WebCard key={i.id} item={i} brief={briefs.get(i.id)} />
         ))}
       </>
     ) : (
       <FeedMessage text="Hacker News could not be loaded." />
     );
   }
-  const list = (sub === 'ai' ? h.ai : h.papers).filter((p) => decisions.get(p.id) !== 'down');
+  const list = sorted(
+    (sub === 'ai' ? h.ai : h.papers).filter((p) => decisions.get(p.id) !== 'down'),
+    (p) => p.id
+  );
   return list.length ? (
     <>
       {list.map((p) => (
-        <FeedPaperCard key={p.id} paper={p} decision={decisions.get(p.id)} />
+        <FeedPaperCard key={p.id} paper={p} decision={decisions.get(p.id)} brief={briefs.get(p.id)} />
       ))}
     </>
   ) : (
     <FeedMessage text={sub === 'papers' ? 'The top papers could not be loaded (OpenAlex budget?).' : 'Nothing here right now.'} />
   );
+}
+
+function timelineInput(i: TimelineItem): BriefInput {
+  return i.kind === 'paper' ? paperInput(i.paper) : i.kind === 'post' ? postInput(i.post) : webInput(i.item);
 }
 
 const styles = StyleSheet.create({
@@ -362,4 +464,6 @@ const styles = StyleSheet.create({
   },
   headline: { fontSize: 34, lineHeight: 40, fontWeight: 700 },
   noWrap: { flexWrap: 'nowrap' },
+  orderRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  flex: { flex: 1 },
 });

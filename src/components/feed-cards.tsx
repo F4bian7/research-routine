@@ -14,6 +14,77 @@ import { useTheme } from '@/hooks/use-theme';
 import type { TimelineItem } from '@/data/people';
 import type { BlueskyPost, FeedPaper } from '@/sources/feed-types';
 import type { WebItem } from '@/sources/web';
+import { moreAbout } from '@/data/briefs';
+import type { Brief, BriefInput } from '@/sources/briefs';
+import { explainError } from '@/sources/gemini';
+
+const SCORE_LABEL = ['', 'Skip', 'Low', 'Optional', 'Worth it', 'Must read'];
+
+export function paperInput(p: FeedPaper): BriefInput {
+  return { id: p.id, kind: p.venue ? `paper, ${p.venue}` : 'paper', text: `${p.title}. ${p.abstract}` };
+}
+
+export function webInput(i: WebItem): BriefInput {
+  const kind = { blog: 'blog post', github: 'GitHub project', hn: 'Hacker News story' }[i.source];
+  return { id: i.id, kind, text: `${i.title}. ${i.summary} ${i.url}` };
+}
+
+export function postInput(p: BlueskyPost): BriefInput {
+  return {
+    id: bskyKey(p),
+    kind: `Bluesky post by ${p.author}`,
+    text: `${p.text} ${p.link ? `${p.link.title}. ${p.link.description}` : ''}`,
+  };
+}
+
+// The plain-language layer on top of an item: rating for the reader, what it is, why it
+// matters, and a longer explanation on request.
+export function BriefBox({ brief, input }: { brief?: Brief; input: BriefInput }) {
+  const db = useDb();
+  const theme = useTheme();
+  const [more, setMore] = useState<string | null>(brief?.more ?? null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  if (!brief) return null;
+  const color = brief.score >= 4 ? theme.success : brief.score <= 2 ? theme.textSecondary : theme.accent;
+  return (
+    <View style={[styles.brief, { borderLeftColor: color }]}>
+      <ThemedText type="smallBold" style={{ color }}>
+        {'●'.repeat(brief.score)}
+        {'○'.repeat(5 - brief.score)} {SCORE_LABEL[brief.score]} for you
+      </ThemedText>
+      <ThemedText>{brief.gist}</ThemedText>
+      {brief.why ? (
+        <ThemedText type="small" themeColor="textSecondary">
+          Why it matters: {brief.why}
+        </ThemedText>
+      ) : null}
+      {more ? (
+        <ThemedText type="small">{more}</ThemedText>
+      ) : (
+        <Pressable
+          disabled={busy}
+          hitSlop={8}
+          onPress={async () => {
+            setBusy(true);
+            setError('');
+            try {
+              setMore((await moreAbout(db, input, brief)).more ?? null);
+            } catch (e) {
+              setError(explainError(e));
+            } finally {
+              setBusy(false);
+            }
+          }}>
+          <ThemedText type="small" style={{ color: theme.accent }}>
+            {busy ? 'Gemini is explaining …' : 'Explain it to me'}
+          </ThemedText>
+        </Pressable>
+      )}
+      {error ? <ThemedText type="small">{error}</ThemedText> : null}
+    </View>
+  );
+}
 
 function relativeTime(iso: string) {
   const ms = Date.now() - new Date(iso).getTime();
@@ -27,10 +98,12 @@ export function FeedPaperCard({
   paper,
   topic,
   decision,
+  brief,
 }: {
   paper: FeedPaper;
   topic?: Topic;
   decision?: FeedDecision;
+  brief?: Brief;
 }) {
   const db = useDb();
   const theme = useTheme();
@@ -58,6 +131,7 @@ export function FeedPaperCard({
       <ThemedText type="smallBold" style={styles.title}>
         {paper.title}
       </ThemedText>
+      <BriefBox brief={brief} input={paperInput(paper)} />
       {paper.abstract ? (
         <Pressable onPress={() => setOpen(!open)}>
           <ThemedText type="small" themeColor="textSecondary" numberOfLines={open ? undefined : 3}>
@@ -90,7 +164,7 @@ export function bskyKey(post: BlueskyPost) {
   return `bsky:${post.uri}`;
 }
 
-export function BlueskyPostCard({ post, saved }: { post: BlueskyPost; saved: boolean }) {
+export function BlueskyPostCard({ post, saved, brief }: { post: BlueskyPost; saved: boolean; brief?: Brief }) {
   const db = useDb();
   const theme = useTheme();
   const [busy, setBusy] = useState(false);
@@ -122,6 +196,7 @@ export function BlueskyPostCard({ post, saved }: { post: BlueskyPost; saved: boo
         </View>
       </View>
       <ThemedText type="small">{post.text}</ThemedText>
+      <BriefBox brief={brief} input={postInput(post)} />
       {post.link ? (
         <Pressable
           onPress={() => openUrl(post.link!.uri)}
@@ -174,10 +249,12 @@ export function TimelineCard({
   item,
   avatar,
   decisions,
+  brief,
 }: {
   item: TimelineItem;
   avatar?: string;
   decisions: Map<string, FeedDecision>;
+  brief?: Brief;
 }) {
   const theme = useTheme();
   const what =
@@ -211,11 +288,11 @@ export function TimelineCard({
         </ThemedText>
       </Pressable>
       {item.kind === 'paper' ? (
-        <FeedPaperCard paper={item.paper} decision={decisions.get(item.paper.id)} />
+        <FeedPaperCard paper={item.paper} decision={decisions.get(item.paper.id)} brief={brief} />
       ) : item.kind === 'post' ? (
-        <BlueskyPostCard post={item.post} saved={decisions.get(bskyKey(item.post)) === 'saved'} />
+        <BlueskyPostCard post={item.post} saved={decisions.get(bskyKey(item.post)) === 'saved'} brief={brief} />
       ) : (
-        <WebCard item={item.item} />
+        <WebCard item={item.item} brief={brief} />
       )}
     </View>
   );
@@ -224,7 +301,7 @@ export function TimelineCard({
 const SOURCE_LABEL = { blog: 'Blog', github: 'GitHub', hn: 'Hacker News' } as const;
 
 // A blog post, GitHub project or Hacker News story.
-export function WebCard({ item }: { item: WebItem }) {
+export function WebCard({ item, brief }: { item: WebItem; brief?: Brief }) {
   const theme = useTheme();
   const meta = [
     SOURCE_LABEL[item.source],
@@ -244,6 +321,7 @@ export function WebCard({ item }: { item: WebItem }) {
           {item.title} ↗
         </ThemedText>
       </Pressable>
+      <BriefBox brief={brief} input={webInput(item)} />
       {item.summary ? (
         <ThemedText type="small" themeColor="textSecondary" numberOfLines={3}>
           {item.summary}
@@ -280,5 +358,6 @@ const styles = StyleSheet.create({
   image: { width: '100%', aspectRatio: 16 / 9, borderRadius: Spacing.two },
   message: { gap: Spacing.two, paddingVertical: Spacing.three },
   timeline: { gap: Spacing.two },
+  brief: { borderLeftWidth: 3, paddingLeft: Spacing.two, gap: Spacing.one },
   initials: { alignItems: 'center', justifyContent: 'center' },
 });

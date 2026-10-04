@@ -169,6 +169,14 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE topics ADD COLUMN goal TEXT NOT NULL DEFAULT '';
   `,
+  // Plain-language briefs and personal ratings for feed items, written by Gemini once.
+  `
+  CREATE TABLE briefs (
+    id TEXT PRIMARY KEY,
+    json TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  `,
 ];
 
 export async function migrateAndSeed(db: Db) {

@@ -3,7 +3,16 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { BlueskyPostCard, bskyKey, FeedMessage, FeedPaperCard, WebCard } from '@/components/feed-cards';
+import {
+  BlueskyPostCard,
+  bskyKey,
+  FeedMessage,
+  FeedPaperCard,
+  paperInput,
+  postInput,
+  WebCard,
+  webInput,
+} from '@/components/feed-cards';
 import { openUrl } from '@/components/link-button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -18,11 +27,13 @@ import {
   webForPerson,
   worksForPeople,
 } from '@/data/people';
+import { useBriefs } from '@/data/use-briefs';
 import { useQuery } from '@/data/use-query';
 import { type Db, useDb } from '@/db/db';
 import { getFeedDecisions } from '@/db/repos/feed';
 import { listNotes } from '@/db/repos/notes';
 import { getPerson } from '@/db/repos/people';
+import { getSettings } from '@/db/repos/settings';
 import { listTopics } from '@/db/repos/topics';
 import type { PersonLinks } from '@/db/types';
 import { LINK_LABEL, linkFor, scholarSearchUrl } from '@/domain/person-links';
@@ -51,7 +62,13 @@ export default function PersonScreen() {
         getFeedDecisions(d),
         listNotes(d),
       ]);
-      return { person, topics, decisions, notes: notes.filter((n) => n.personIds.includes(Number(id))) };
+      return {
+        person,
+        topics,
+        decisions,
+        notes: notes.filter((n) => n.personIds.includes(Number(id))),
+        hasKey: !!(await getSettings(d)).geminiApiKey,
+      };
     },
     [id]
   );
@@ -111,6 +128,14 @@ export default function PersonScreen() {
       alive = false;
     };
   }, [handle, tab]);
+
+  // Plain-language briefs for what is shown in the current tab.
+  const shownPapers = papers?.key === authorKey ? (papers.items ?? []) : [];
+  const shownPosts = posts?.key === handle ? (posts.items ?? []) : [];
+  const shownWeb = web?.key === webKey ? (web.items ?? []) : [];
+  const briefInputs =
+    tab === 'papers' ? shownPapers.map(paperInput) : tab === 'web' ? shownWeb.map(webInput) : shownPosts.map(postInput);
+  const { briefs } = useBriefs(briefInputs, !!data?.hasKey);
 
   if (!data) return <ThemedView style={styles.container} />;
   const { person, topics, decisions, notes } = data;
@@ -232,7 +257,7 @@ export default function PersonScreen() {
                 <FeedMessage text="No papers found." />
               ) : (
                 currentPapers.map((p) => (
-                  <FeedPaperCard key={p.id} paper={p} decision={decisions.get(p.id)} />
+                  <FeedPaperCard key={p.id} paper={p} decision={decisions.get(p.id)} brief={briefs.get(p.id)} />
                 ))
               )
             ) : tab === 'web' ? (
@@ -247,7 +272,7 @@ export default function PersonScreen() {
                   }
                 />
               ) : (
-                web.items.map((i) => <WebCard key={i.id} item={i} />)
+                web.items.map((i) => <WebCard key={i.id} item={i} brief={briefs.get(i.id)} />)
               )
             ) : !handle ? (
               <FeedMessage text='No Bluesky handle yet. Tap "Edit" to add one.' />
@@ -259,7 +284,12 @@ export default function PersonScreen() {
               <FeedMessage text="No posts yet." />
             ) : (
               currentPosts.map((p) => (
-                <BlueskyPostCard key={p.uri} post={p} saved={decisions.get(bskyKey(p)) === 'saved'} />
+                <BlueskyPostCard
+                  key={p.uri}
+                  post={p}
+                  saved={decisions.get(bskyKey(p)) === 'saved'}
+                  brief={briefs.get(bskyKey(p))}
+                />
               ))
             )}
           </ScrollView>

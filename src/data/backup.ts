@@ -22,6 +22,7 @@ const TABLES = [
   'settings',
   'summaries',
   'feed_seen',
+  'briefs',
 ] as const;
 type Table = (typeof TABLES)[number];
 
