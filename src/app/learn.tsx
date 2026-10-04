@@ -1,279 +1,199 @@
-import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { LessonBody, QuizView } from '@/components/lesson-view';
+import { Checks, LessonBody, NextSteps } from '@/components/lesson-view';
 import { goBack, ScreenBar } from '@/components/screen-bar';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { completeSession, finishLesson, getGemini, prepareLesson, sessionCards, XP } from '@/data/learn';
+import { completeSession, exploreFrom, finishLesson, getGemini, peekLesson, prepareLesson, XP } from '@/data/learn';
 import { useDb } from '@/db/db';
-import { saveReview } from '@/db/repos/cards';
-import { getLearnDay, totalXp } from '@/db/repos/learn';
-import type { Card, Lesson, Topic } from '@/db/types';
+import { addNote } from '@/db/repos/notes';
+import { getLesson, listExplorations } from '@/db/repos/lessons';
+import { totalXp } from '@/db/repos/learn';
+import { listTopics } from '@/db/repos/topics';
+import type { Lesson, Topic } from '@/db/types';
 import { todayKey } from '@/domain/dates';
-import { type Grade, intervalLabel, nextInterval, review } from '@/domain/srs';
 import { useTheme } from '@/hooks/use-theme';
 import { explainError } from '@/sources/gemini';
+import type { ExploreKind } from '@/sources/learning';
 
-type LessonState =
-  | { state: 'none' }
-  | { state: 'loading' }
-  | { state: 'ready'; lesson: Lesson; topic: Topic }
-  | { state: 'error'; message: string };
-
-type Phase = 'loading' | 'intro' | 'lesson' | 'quiz' | 'cards' | 'done';
-type QueueItem = { card: Card; retry: boolean };
+type Phase = 'loading' | 'empty' | 'learning' | 'done';
 
 const TODAY = { pathname: '/' } as const;
 
-const GRADES: { grade: Grade; label: string }[] = [
-  { grade: 'again', label: 'Again' },
-  { grade: 'hard', label: 'Hard' },
-  { grade: 'good', label: 'Good' },
-  { grade: 'easy', label: 'Easy' },
-];
-
+// A session is a conversation with a tutor: the next lesson of the course, then as far
+// deeper or broader as the learner wants, with understanding checks on the way. Any
+// number of sessions a day; the first one keeps the streak.
+// With `?lesson=<id>` it continues from an earlier lesson instead of the next one.
 export default function LearnScreen() {
+  const params = useLocalSearchParams<{ lesson?: string; n?: string }>();
   const db = useDb();
   const theme = useTheme();
   const [today] = useState(todayKey);
   const [phase, setPhase] = useState<Phase>('loading');
-  const [lesson, setLesson] = useState<LessonState>({ state: 'none' });
-  const [queue, setQueue] = useState<QueueItem[]>([]);
-  const [cardCount, setCardCount] = useState(0);
-  const [showBack, setShowBack] = useState(false);
-  const [quizDone, setQuizDone] = useState(false);
-  const [xp, setXp] = useState(0);
-  const [reviewed, setReviewed] = useState(0);
+  const [topic, setTopic] = useState<Topic | null>(null);
+  const [blocks, setBlocks] = useState<Lesson[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState('');
   const [hasKey, setHasKey] = useState(false);
+  const [xp, setXp] = useState(0);
   const [total, setTotal] = useState(0);
-  const [lessonDoneToday, setLessonDoneToday] = useState(false);
+  const [next, setNext] = useState<string | null>(null);
+  const [saved, setSaved] = useState<number[]>([]);
+  const scroll = useRef<ScrollView>(null);
+  const positions = useRef(new Map<number, number>());
+  const scrollTo = useRef<number | null>(null);
 
-  // Gather the session: due and new cards right away, the lesson in the background
-  // (writing it with Gemini takes a few seconds).
+  // The next lesson of the course (written by Gemini when it is due), or the lesson
+  // given in the route with what was explored from it before.
   useEffect(() => {
     let alive = true;
     (async () => {
-      const [cards, day, gemini] = await Promise.all([
-        sessionCards(db, today),
-        getLearnDay(db, today),
-        getGemini(db),
-      ]);
+      const g = await getGemini(db);
       if (!alive) return;
-      setQueue(cards.map((card) => ({ card, retry: false })));
-      setCardCount(cards.length);
-      setHasKey(!!gemini);
-      setPhase('intro');
-      if (day?.lessonId) {
-        setLessonDoneToday(true); // this is extra practice
-        return;
-      }
-      setLesson({ state: 'loading' });
+      setHasKey(!!g);
       try {
+        if (params.lesson) {
+          const root = await getLesson(db, Number(params.lesson));
+          if (!root) throw new Error('This lesson no longer exists.');
+          const [earlier, topics] = await Promise.all([listExplorations(db, root.id), listTopics(db)]);
+          if (!alive) return;
+          setTopic(topics.find((t) => t.id === root.topicId) ?? null);
+          setBlocks([root, ...earlier]);
+          setPhase('learning');
+          return;
+        }
         const got = await prepareLesson(db);
-        if (alive) setLesson(got ? { state: 'ready', ...got } : { state: 'none' });
+        if (!alive) return;
+        if (!got) return setPhase('empty');
+        setTopic(got.topic);
+        setBlocks([got.lesson]);
+        setPhase('learning');
       } catch (e) {
-        if (alive) setLesson({ state: 'error', message: explainError(e) });
+        if (!alive) return;
+        setError(e instanceof Error && !('status' in e) ? e.message : explainError(e));
+        setPhase('empty');
       }
     })();
     return () => {
       alive = false;
     };
-  }, [db, today]);
+  }, [db, params.lesson, params.n]);
 
-  async function finish(gained: number, reviewedNow: number) {
-    await completeSession(db, today, {
-      xp: gained,
-      reviewed: reviewedNow,
-      lessonId: lesson.state === 'ready' ? lesson.lesson.id : null,
-    });
+  async function go(kind: ExploreKind, target: string) {
+    const root = blocks[0];
+    setBusy(
+      kind === 'question' ? 'Gemini is answering …' : kind === 'simpler' ? 'Gemini is explaining it again …' : `Gemini is writing about “${target}” …`
+    );
+    setError('');
+    try {
+      const block = await exploreFrom(db, root, kind, target);
+      scrollTo.current = block.id;
+      setBlocks((b) => [...b, block]);
+      setXp((x) => x + XP.exploration);
+    } catch (e) {
+      setError(explainError(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function finish() {
+    const root = blocks[0];
+    await finishLesson(db, root);
+    const gained = xp + (root.status === 'done' && params.lesson ? 0 : XP.lesson);
+    await completeSession(db, today, { xp: gained, reviewed: 0, lessonId: root.id });
+    setXp(gained);
     setTotal(await totalXp(db));
+    setNext((await peekLesson(db, true)).lesson?.title ?? null);
     setPhase('done');
   }
 
-  async function afterLesson() {
-    if (lesson.state === 'ready') await finishLesson(db, lesson.lesson);
-    // The lesson's own flashcards join the queue as new cards.
-    const cards = await sessionCards(db, today);
-    const known = new Set(queue.map((q) => q.card.id));
-    const extra = cards.filter((c) => !known.has(c.id)).map((card) => ({ card, retry: false }));
-    const next = [...queue, ...extra];
-    setQueue(next);
-    setCardCount(cardCount + extra.length);
-    if (next.length) setPhase('cards');
-    else await finish(xp, reviewed);
+  async function saveAsNote(b: Lesson) {
+    await addNote(db, {
+      title: b.title,
+      body: [b.content?.keyPoints.map((k) => `- ${k}`).join('\n') ?? '', `From the lesson [[${blocks[0].title}]]`]
+        .filter(Boolean)
+        .join('\n\n'),
+      quote: '',
+      paperId: null,
+      topicIds: b.topicId ? [b.topicId] : [],
+      personIds: [],
+    });
+    setSaved((s) => [...s, b.id]);
   }
 
-  async function grade(g: Grade) {
-    const [current, ...rest] = queue;
-    let gained = xp;
-    let count = reviewed;
-    if (!current.retry) {
-      await saveReview(db, current.card.id, review(current.card, g, today));
-      gained += XP.card;
-      count += 1;
-      setXp(gained);
-      setReviewed(count);
-    }
-    // A missed card comes back once at the end of the session.
-    const next = g === 'again' && !current.retry ? [...rest, { card: current.card, retry: true }] : rest;
-    setQueue(next);
-    setShowBack(false);
-    if (next.length === 0) await finish(gained, count);
-  }
-
-  const lessonReady = lesson.state === 'ready';
-  const nothing = phase === 'intro' && cardCount === 0 && (lesson.state === 'none' || lesson.state === 'error');
+  const last = blocks[blocks.length - 1];
 
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView edges={['top']} style={styles.container}>
         <ScreenBar
           left={{ label: phase === 'done' ? 'Close' : 'Stop', onPress: () => goBack(TODAY) }}
-          title="Today's session"
+          title="Learn"
+          right={phase === 'learning' ? { label: 'Finish', onPress: finish, bold: true } : undefined}
         />
-        <ScrollView contentContainerStyle={styles.content}>
-          {phase === 'loading' && <ThemedText themeColor="textSecondary">Getting ready …</ThemedText>}
-
-          {phase === 'intro' && !nothing && (
-            <>
-              <ThemedText style={styles.big}>About 5 minutes</ThemedText>
-              <ThemedView type="backgroundElement" style={styles.panel}>
-                <ThemedText>
-                  {lesson.state === 'ready'
-                    ? `📖 New lesson: ${lesson.lesson.title}`
-                    : lesson.state === 'loading'
-                      ? '📖 Gemini is writing today’s lesson …'
-                      : lesson.state === 'error'
-                        ? `📖 No lesson today. ${lesson.message}`
-                        : lessonDoneToday
-                          ? '📖 Today’s lesson is done.'
-                          : hasKey
-                            ? '📖 No lesson today: add a topic in Brain → Topics.'
-                            : '📖 No lesson: lessons need the free Gemini key (Settings).'}
-                </ThemedText>
-                <ThemedText>
-                  🔁 {cardCount} {cardCount === 1 ? 'card' : 'cards'} to review
-                </ThemedText>
-              </ThemedView>
-              <Button
-                label={lesson.state === 'loading' ? 'Preparing …' : 'Start'}
-                variant="primary"
-                disabled={lesson.state === 'loading'}
-                onPress={() => setPhase(lessonReady ? 'lesson' : 'cards')}
-              />
-              {lesson.state === 'loading' && cardCount > 0 && (
-                <Button label="Start with the cards" variant="ghost" onPress={() => setPhase('cards')} />
-              )}
-            </>
+        <ScrollView
+          ref={scroll}
+          contentContainerStyle={styles.content}
+          onContentSizeChange={() => {
+            const id = scrollTo.current;
+            const y = id !== null ? positions.current.get(id) : undefined;
+            if (y !== undefined) {
+              scroll.current?.scrollTo({ y: Math.max(0, y - 8), animated: true });
+              scrollTo.current = null;
+            }
+          }}>
+          {phase === 'loading' && (
+            <ThemedText themeColor="textSecondary">
+              {params.lesson ? 'Opening the lesson …' : 'Gemini is preparing your next lesson …'}
+            </ThemedText>
           )}
 
-          {nothing && (
-            <>
-              <ThemedText style={styles.big}>
-                {lesson.state === 'error' ? 'The lesson could not be written' : 'Nothing to learn yet'}
-              </ThemedText>
-              {lesson.state === 'error' ? (
-                <>
-                  <ThemedText>{lesson.message}</ThemedText>
-                  <Button label="Try again" variant="primary" onPress={() => router.replace('/learn')} />
-                </>
-              ) : null}
+          {phase === 'empty' && (
+            <View style={styles.box}>
+              <ThemedText style={styles.big}>{error ? 'The lesson could not be written' : 'No lesson to start'}</ThemedText>
+              {error ? <ThemedText>{error}</ThemedText> : null}
               <ThemedText themeColor="textSecondary">
-                {lesson.state === 'error'
-                  ? 'If it keeps failing, open Settings and tap "Test key"; the app then looks for a Gemini model that works with your key.'
-                  : hasKey
-                  ? 'Plan a course for a topic in Brain → Cards, or turn notes and papers into flashcards.'
-                  : 'Daily lessons are written by Gemini: add the free key in Settings. Flashcards from your notes work without it.'}
+                {!hasKey
+                  ? 'Lessons are written by Gemini: add the free key in Settings.'
+                  : error
+                    ? 'Try again in a minute. If it keeps failing, tap "Test key" in Settings.'
+                    : 'Add a topic in Brain → Topics, or a study pack, to get a course.'}
               </ThemedText>
-              <Button
-                label={hasKey ? 'Open Cards' : 'Open Settings'}
-                variant="primary"
-                onPress={() =>
-                  router.replace(hasKey ? { pathname: '/brain', params: { view: 'cards' } } : '/settings')
-                }
-              />
-              <Button label="Count today anyway" variant="ghost" onPress={() => finish(0, 0)} />
-            </>
+              {error ? <Button label="Try again" variant="primary" onPress={() => router.replace({ pathname: '/learn', params: { n: String(Date.now()) } })} /> : null}
+              <Button label={hasKey ? 'Open Topics' : 'Open Settings'} onPress={() => router.replace(hasKey ? { pathname: '/brain', params: { view: 'topics' } } : '/settings')} />
+            </View>
           )}
 
-          {phase === 'lesson' && lessonReady && (
+          {phase === 'learning' &&
+            blocks.map((b) => (
+              <View
+                key={b.id}
+                style={[styles.block, b !== blocks[0] && { borderTopColor: theme.border, borderTopWidth: StyleSheet.hairlineWidth }]}
+                onLayout={(e) => positions.current.set(b.id, e.nativeEvent.layout.y)}>
+                <LessonBody lesson={b} topic={b === blocks[0] ? topic : null} />
+                <Checks lesson={b} onAnswer={(right) => right && setXp((x) => x + XP.quizRight)} />
+                <Button
+                  label={saved.includes(b.id) ? 'Saved to your notes ✓' : 'Save key points as a note'}
+                  variant="ghost"
+                  disabled={saved.includes(b.id)}
+                  onPress={() => saveAsNote(b)}
+                />
+              </View>
+            ))}
+
+          {phase === 'learning' && last && (
             <>
-              <LessonBody lesson={lesson.lesson} topic={lesson.topic} />
-              <Button
-                label="Continue"
-                variant="primary"
-                onPress={() => {
-                  setXp(xp + XP.lesson);
-                  setPhase(lesson.lesson.content?.quiz ? 'quiz' : 'cards');
-                }}
-              />
+              <NextSteps lesson={last} busy={!!busy} onExplore={go} />
+              {busy ? <ThemedText style={{ color: theme.accent }}>{busy}</ThemedText> : null}
+              {error ? <ThemedText style={styles.error}>{error}</ThemedText> : null}
+              <Button label="Finish session" variant="primary" disabled={!!busy} onPress={finish} />
             </>
-          )}
-
-          {phase === 'quiz' && lessonReady && lesson.lesson.content && (
-            <>
-              <QuizView
-                quiz={lesson.lesson.content.quiz}
-                onAnswer={(right) => {
-                  setQuizDone(true);
-                  if (right) setXp((x) => x + XP.quizRight);
-                }}
-              />
-              {quizDone && <Button label="Continue" variant="primary" onPress={afterLesson} />}
-            </>
-          )}
-
-          {phase === 'cards' && queue.length > 0 && (
-            <>
-              <ThemedText type="small" themeColor="textSecondary">
-                {queue.filter((q) => !q.retry).length} left
-                {queue.some((q) => q.retry) ? ` · ${queue.filter((q) => q.retry).length} to repeat` : ''}
-              </ThemedText>
-              <Pressable onPress={() => setShowBack(true)} style={[styles.flash, { borderColor: theme.border }]}>
-                <ThemedText style={styles.front}>{queue[0].card.front}</ThemedText>
-                {showBack ? (
-                  <>
-                    <View style={[styles.rule, { backgroundColor: theme.border }]} />
-                    <ThemedText style={styles.back}>{queue[0].card.back}</ThemedText>
-                  </>
-                ) : (
-                  <ThemedText type="small" themeColor="textSecondary">
-                    Think of the answer, then tap.
-                  </ThemedText>
-                )}
-              </Pressable>
-              {showBack ? (
-                <View style={styles.grades}>
-                  {GRADES.map(({ grade: g, label }) => (
-                    <Pressable
-                      key={g}
-                      onPress={() => grade(g)}
-                      style={({ pressed }) => [
-                        styles.grade,
-                        { backgroundColor: g === 'again' ? '#D93F3F' : g === 'good' ? theme.accent : theme.backgroundSelected, opacity: pressed ? 0.6 : 1 },
-                      ]}>
-                      <ThemedText style={[styles.gradeLabel, { color: g === 'again' || g === 'good' ? theme.onAccent : theme.text }]}>
-                        {label}
-                      </ThemedText>
-                      <ThemedText type="small" style={{ color: g === 'again' || g === 'good' ? theme.onAccent : theme.textSecondary }}>
-                        {queue[0].retry ? 'again' : intervalLabel(nextInterval(queue[0].card, g))}
-                      </ThemedText>
-                    </Pressable>
-                  ))}
-                </View>
-              ) : (
-                <Button label="Show answer" variant="primary" onPress={() => setShowBack(true)} />
-              )}
-            </>
-          )}
-
-          {phase === 'cards' && queue.length === 0 && (
-            <Button label="Finish" variant="primary" onPress={() => finish(xp, reviewed)} />
           )}
 
           {phase === 'done' && (
@@ -281,9 +201,14 @@ export default function LearnScreen() {
               <ThemedText style={styles.trophy}>🎉</ThemedText>
               <ThemedText style={styles.big}>Session done</ThemedText>
               <ThemedText themeColor="textSecondary">
-                +{xp} XP · {reviewed} {reviewed === 1 ? 'card' : 'cards'} reviewed · {total} XP in total
+                +{xp} XP · {blocks.length - 1} {blocks.length - 1 === 1 ? 'exploration' : 'explorations'} · {total} XP in total
               </ThemedText>
-              <Button label="Back to Today" variant="primary" onPress={() => router.replace(TODAY)} />
+              <Button
+                label={next ? `Next lesson: ${next}` : 'Start another session'}
+                variant="primary"
+                onPress={() => router.replace({ pathname: '/learn', params: { n: String(Date.now()) } })}
+              />
+              <Button label="Back to Today" onPress={() => router.replace(TODAY)} />
             </View>
           )}
         </ScrollView>
@@ -297,27 +222,15 @@ const styles = StyleSheet.create({
   content: {
     padding: Spacing.three,
     paddingBottom: Spacing.six,
-    gap: Spacing.three,
+    gap: Spacing.four,
     width: '100%',
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
   },
+  box: { gap: Spacing.three },
+  block: { gap: Spacing.three, paddingTop: Spacing.three },
   big: { fontSize: 26, lineHeight: 32, fontWeight: 700 },
-  panel: { borderRadius: Spacing.three, padding: Spacing.three, gap: Spacing.two },
-  flash: {
-    borderWidth: 1,
-    borderRadius: Spacing.four,
-    padding: Spacing.four,
-    minHeight: 220,
-    justifyContent: 'center',
-    gap: Spacing.three,
-  },
-  front: { fontSize: 20, lineHeight: 28, fontWeight: 700 },
-  back: { fontSize: 18, lineHeight: 26 },
-  rule: { height: StyleSheet.hairlineWidth },
-  grades: { flexDirection: 'row', gap: Spacing.two },
-  grade: { flex: 1, borderRadius: Spacing.three, paddingVertical: Spacing.two, alignItems: 'center', minHeight: 56, justifyContent: 'center' },
-  gradeLabel: { fontWeight: 700 },
+  error: { color: '#D93F3F' },
   done: { alignItems: 'center', gap: Spacing.three, paddingTop: Spacing.five },
   trophy: { fontSize: 64, lineHeight: 76 },
 });

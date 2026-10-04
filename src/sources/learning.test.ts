@@ -40,3 +40,21 @@ test('loose shapes from the model are accepted', () => {
   const l2 = parseLesson(JSON.stringify({ body: 'x', quiz: { question: 'Q', options: ['a', 'b'], answer: 'b' } }));
   assert.equal(l2.quiz.answer, 1);
 });
+
+test('a lesson brings checks and places to go next', () => {
+  const l = parseLesson(
+    JSON.stringify({
+      body: '## Intuition\nText',
+      checks: [
+        { question: 'Q1', options: ['a', 'b'], answer: 1 },
+        { question: 'broken', options: ['a'], answer: 3 },
+      ],
+      deeper: [{ title: 'Coil sensitivities', why: 'W' }, 'g-factor', { why: 'no title' }],
+      broader: [{ title: 'Compressed sensing' }],
+    })
+  );
+  assert.equal(l.checks!.length, 1);
+  assert.equal(l.quiz.question, 'Q1');
+  assert.deepEqual(l.deeper!.map((d) => d.title), ['Coil sensitivities', 'g-factor']);
+  assert.equal(l.broader![0].why, '');
+});

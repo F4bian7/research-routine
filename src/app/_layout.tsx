@@ -22,6 +22,7 @@ export default function RootLayout() {
           <Stack.Screen name="card/edit" />
           <Stack.Screen name="lesson/[id]" />
           <Stack.Screen name="learn" />
+          <Stack.Screen name="review" />
         </Stack>
       </DbProvider>
     </ThemeProvider>

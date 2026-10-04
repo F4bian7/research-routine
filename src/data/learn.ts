@@ -1,10 +1,12 @@
 import type { Db } from '@/db/db';
-import { addCards, dueCards, newCards } from '@/db/repos/cards';
+import { dueCards, newCards } from '@/db/repos/cards';
 import { markDone } from '@/db/repos/completions';
 import { logLearning } from '@/db/repos/learn';
 import {
+  addExploration,
   addSyllabus,
   getLesson,
+  listExplorations,
   listLessons,
   markLessonDone,
   saveLessonContent,
@@ -13,12 +15,12 @@ import { getSettings, setSetting } from '@/db/repos/settings';
 import { listTopics } from '@/db/repos/topics';
 import type { Card, Lesson, Topic } from '@/db/types';
 import { type Gemini, GEMMA_AUTO } from '@/sources/gemini';
-import { makeLesson, makeSyllabus } from '@/sources/learning';
+import { explore, type ExploreKind, makeLesson, makeSyllabus } from '@/sources/learning';
 
 export const MAX_REVIEWS = 15;
 export const MAX_NEW_CARDS = 5;
 
-export const XP = { lesson: 10, quizRight: 5, card: 2 };
+export const XP = { lesson: 10, exploration: 5, quizRight: 5, card: 2 };
 
 // Free-tier limits (AI Studio, 2026-10): every Flash model has its own 20 requests a
 // day, the Flash-Lite models 500, Gemma 4 about 14,400 (but only 16K tokens a minute).
@@ -112,19 +114,35 @@ export async function prepareLesson(db: Db): Promise<{ lesson: Lesson; topic: To
   return { lesson, topic };
 }
 
-// Finishing a lesson turns its suggested flashcards into cards for review.
 export async function finishLesson(db: Db, lesson: Lesson) {
-  await markLessonDone(db, lesson.id);
-  await addCards(
-    db,
-    (lesson.content?.cards ?? []).map((c) => ({
-      ...c,
-      source: 'lesson' as const,
-      status: 'active' as const,
-      lessonId: lesson.id,
-      topicId: lesson.topicId,
-    }))
-  );
+  if (lesson.status !== 'done') await markLessonDone(db, lesson.id);
+}
+
+// A follow-up from a lesson, saved as an exploration under it so it can be reread.
+export async function exploreFrom(
+  db: Db,
+  root: Lesson,
+  kind: ExploreKind,
+  target: string
+): Promise<Lesson> {
+  const gemini = await getGemini(db);
+  if (!gemini) throw new Error('Add the free Gemini key in Settings first.');
+  const [topic, earlier] = await Promise.all([
+    root.topicId ? listTopics(db).then((ts) => ts.find((t) => t.id === root.topicId)) : undefined,
+    listExplorations(db, root.id),
+  ]);
+  const content = await explore(gemini, {
+    topic: topic?.name ?? '',
+    goal: topic?.goal,
+    from: { title: root.title, keyPoints: root.content?.keyPoints ?? [] },
+    kind,
+    target,
+    seen: [root.title, ...earlier.map((e) => e.title)],
+  });
+  const title =
+    kind === 'simpler' ? `${root.title}, explained more simply` : kind === 'question' ? target : target;
+  const id = await addExploration(db, root, kind, title, kind === 'question' ? target : '', content);
+  return (await getLesson(db, id))!;
 }
 
 export async function sessionCards(db: Db, today: string): Promise<Card[]> {

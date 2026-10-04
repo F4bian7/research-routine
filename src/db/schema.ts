@@ -177,6 +177,12 @@ const MIGRATIONS: string[] = [
     created_at TEXT NOT NULL
   );
   `,
+  // Explorations: deeper, broader or simpler explanations and answers, branching off a lesson.
+  `
+  ALTER TABLE lessons ADD COLUMN parent_id INTEGER REFERENCES lessons(id) ON DELETE CASCADE;
+  ALTER TABLE lessons ADD COLUMN kind TEXT NOT NULL DEFAULT 'core';
+  ALTER TABLE lessons ADD COLUMN prompt TEXT NOT NULL DEFAULT '';
+  `,
 ];
 
 export async function migrateAndSeed(db: Db) {

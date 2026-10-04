@@ -10,7 +10,7 @@ import { getGemini } from '@/data/learn';
 import { useQuery } from '@/data/use-query';
 import { type Db, useDb } from '@/db/db';
 import { cardCounts, deleteCard, listCards, updateCard } from '@/db/repos/cards';
-import { addSyllabus, deleteSyllabus, listLessons } from '@/db/repos/lessons';
+import { addSyllabus, countExplorations, deleteSyllabus, listLessons } from '@/db/repos/lessons';
 import { getSettings } from '@/db/repos/settings';
 import type { Card, Lesson, Topic } from '@/db/types';
 import { todayKey } from '@/domain/dates';
@@ -20,14 +20,15 @@ import { explainError } from '@/sources/gemini';
 import { makeSyllabus } from '@/sources/learning';
 
 async function load(db: Db) {
-  const [counts, suggested, active, lessons, settings] = await Promise.all([
+  const [counts, suggested, active, lessons, settings, explored] = await Promise.all([
     cardCounts(db, todayKey()),
     listCards(db, 'suggested'),
     listCards(db, 'active'),
     listLessons(db),
     getSettings(db),
+    countExplorations(db),
   ]);
-  return { counts, suggested, active, lessons, hasKey: !!settings.geminiApiKey, focusId: settings.focusTopicId };
+  return { counts, suggested, active, lessons, hasKey: !!settings.geminiApiKey, focusId: settings.focusTopicId, explored };
 }
 
 function SuggestedCard({ card }: { card: Card }) {
@@ -50,7 +51,17 @@ function SuggestedCard({ card }: { card: Card }) {
 }
 
 // One topic's course: plan it, see the lessons, reread finished ones.
-function CourseCard({ topic, lessons, hasKey }: { topic: Topic; lessons: Lesson[]; hasKey: boolean }) {
+function CourseCard({
+  topic,
+  lessons,
+  hasKey,
+  explored,
+}: {
+  topic: Topic;
+  lessons: Lesson[];
+  hasKey: boolean;
+  explored: Map<number, number>;
+}) {
   const db = useDb();
   const theme = useTheme();
   const [busy, setBusy] = useState(false);
@@ -142,6 +153,7 @@ function CourseCard({ topic, lessons, hasKey }: { topic: Topic; lessons: Lesson[
                   hitSlop={4}>
                   <ThemedText type="small" style={{ color: theme.accent }}>
                     ✓ {l.position}. {l.title}
+                    {explored.get(l.id) ? `  · ${explored.get(l.id)} explored` : ''}
                   </ThemedText>
                 </Pressable>
               ) : (
@@ -169,7 +181,7 @@ export function CardsView({ topics }: { topics: Topic[] }) {
   const data = useQuery(load);
   const [showAll, setShowAll] = useState(false);
   if (!data) return null;
-  const { counts, suggested, active, lessons, hasKey, focusId } = data;
+  const { counts, suggested, active, lessons, hasKey, focusId, explored } = data;
   const focus = topics.find((t) => t.id === focusId);
 
   return (
@@ -188,7 +200,11 @@ export function CardsView({ topics }: { topics: Topic[] }) {
           </View>
         ))}
       </ThemedView>
-      <Button label="Start a session" variant="primary" onPress={() => router.push('/learn')} />
+      <Button label="Review flashcards" onPress={() => router.push('/review')} />
+      <ThemedText type="small" themeColor="textSecondary">
+        Flashcards are optional: they bring back facts from your notes and papers. Learning
+        itself happens in the lessons below.
+      </ThemedText>
 
       {suggested.length > 0 && (
         <>
@@ -211,7 +227,13 @@ export function CardsView({ topics }: { topics: Topic[] }) {
           : 'topics take turns.'}
       </ThemedText>
       {topics.map((t) => (
-        <CourseCard key={t.id} topic={t} lessons={lessons.filter((l) => l.topicId === t.id)} hasKey={hasKey} />
+        <CourseCard
+          key={t.id}
+          topic={t}
+          lessons={lessons.filter((l) => l.topicId === t.id)}
+          hasKey={hasKey}
+          explored={explored}
+        />
       ))}
 
       <Pressable onPress={() => setShowAll(!showAll)} hitSlop={8}>

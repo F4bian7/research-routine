@@ -1,4 +1,4 @@
-import type { LessonContent, Quiz } from '@/db/types';
+import type { Direction, LessonContent, Quiz } from '@/db/types';
 import { type Gemini, generateJson } from './gemini';
 
 // Gemini prompts for the Learn part: a fundamentals syllabus per topic, one lesson
@@ -87,18 +87,58 @@ export function parseCards(list: unknown): { front: string; back: string }[] {
 
 export { parseCardList as _parseCardListForTests };
 
+function parseDirections(list: unknown): Direction[] {
+  return (Array.isArray(list) ? list : [])
+    .map((d) => (typeof d === 'string' ? { title: d } : (d as { title?: unknown; why?: unknown })))
+    .map((d) => ({ title: str(d.title), why: str((d as { why?: unknown }).why) }))
+    .filter((d) => d.title)
+    .slice(0, 3);
+}
+
 export function parseLesson(text: string): LessonContent {
-  const raw = JSON.parse(text) as { body?: unknown; keyPoints?: unknown[]; quiz?: unknown; cards?: unknown };
+  const raw = JSON.parse(text) as {
+    body?: unknown;
+    keyPoints?: unknown[];
+    quiz?: unknown;
+    checks?: unknown[];
+    deeper?: unknown;
+    broader?: unknown;
+    cards?: unknown;
+  };
   const body = str(raw.body);
   if (!body) throw new Error('empty lesson');
+  const checks: Quiz[] = [];
+  for (const q of [...(Array.isArray(raw.checks) ? raw.checks : []), ...(raw.quiz ? [raw.quiz] : [])]) {
+    try {
+      checks.push(parseQuiz(q));
+    } catch {
+      // a broken question is left out
+    }
+  }
+  if (checks.length === 0) throw new Error('no check question');
   return {
     body,
     keyPoints: (raw.keyPoints ?? []).map(str).filter(Boolean),
-    quiz: parseQuiz(raw.quiz),
+    quiz: checks[0],
+    checks,
+    deeper: parseDirections(raw.deeper),
+    broader: parseDirections(raw.broader),
     cards: parseCards(raw.cards),
   };
 }
 
+const LESSON_SHAPE = `Answer only with JSON:
+{
+  "body": "the explanation; '## ' starts a short heading, '- ' a bullet, blank lines between paragraphs",
+  "keyPoints": ["3 short takeaways"],
+  "checks": [ { "question": "...", "options": ["a", "b", "c", "d"], "answer": 0, "explanation": "why this is right and the others not" } ],
+  "deeper": [ { "title": "a concept inside this lesson worth understanding in more depth", "why": "one sentence" } ],
+  "broader": [ { "title": "a related idea or a neighbouring field this connects to", "why": "one sentence" } ]
+}
+Give 2 checks that test understanding (not recall of wording), 2 "deeper" and 2 "broader"
+suggestions.`;
+
+// A core lesson of the course: explained, not drilled.
 export function makeLesson(
   g: Gemini,
   topic: string,
@@ -107,19 +147,15 @@ export function makeLesson(
   goal?: string
 ) {
   const instruction = `${AUDIENCE}${goalLine(goal)}
-Write one lesson of about 250 to 350 words. Explain the idea with intuition first, then
-the essentials (a formula only if it really helps, explained in words). Give a concrete
-example from the topic. Assume the learner has done the earlier lessons listed.
-Then one multiple-choice question that checks understanding (four options, one correct),
-and two or three flashcards worth remembering long-term.
-
-Answer only with JSON:
-{
-  "body": "paragraphs separated by blank lines",
-  "keyPoints": ["3 short takeaways"],
-  "quiz": { "question": "...", "options": ["a", "b", "c", "d"], "answer": 0, "explanation": "why" },
-  "cards": [ { "front": "question", "back": "short answer" } ]
-}`;
+You are a patient tutor. Teach one idea so it is understood, not memorised, in about 400 to
+600 words:
+## The intuition: what it is and why it exists, with an everyday analogy if one fits.
+## How it works: the essentials step by step; a formula only if it really helps, with every
+symbol explained in words.
+## Example: one concrete case from the topic.
+## Where it shows up: how it is used in practice and in current research.
+Explain every technical term the first time it appears. Assume the earlier lessons listed.
+${LESSON_SHAPE}`;
   const input = [
     `Topic: ${topic}`,
     `Lesson: ${lesson.title}`,
@@ -129,6 +165,40 @@ Answer only with JSON:
     .filter(Boolean)
     .join('\n');
   return generateJson(g, instruction, input, parseLesson, 0.4);
+}
+
+export type ExploreKind = 'deeper' | 'broader' | 'simpler' | 'question';
+
+// A follow-up from a lesson: go deeper into a concept, widen to a connected idea,
+// explain the same thing more simply, or answer the learner's own question.
+export function explore(
+  g: Gemini,
+  input: {
+    topic: string;
+    goal?: string;
+    from: { title: string; keyPoints: string[] };
+    kind: ExploreKind;
+    target: string; // a suggested title, or the learner's question
+    seen: string[]; // titles already covered, to avoid repeating them
+  }
+) {
+  const task = {
+    deeper: `Go one level deeper into "${input.target}": the mechanism, the maths in words, the
+subtleties and the common misconceptions.`,
+    broader: `Widen the view to "${input.target}": what it is, how it connects to the lesson, and what
+the learner gains from seeing the link.`,
+    simpler: `Explain the lesson again for someone who found it too hard: simpler words, a strong
+analogy, one small worked example, no new material.`,
+    question: `Answer the learner's question: "${input.target}". Answer it directly first, then
+explain the background they need.`,
+  }[input.kind];
+  const instruction = `${AUDIENCE}${goalLine(input.goal)}
+You are a patient tutor in a conversation that started from the lesson "${input.from.title}"
+(key points: ${input.from.keyPoints.join('; ')}). ${task}
+About 250 to 450 words. Explain every technical term the first time it appears. Do not
+repeat what these already covered: ${input.seen.join('; ') || 'nothing yet'}.
+${LESSON_SHAPE.replace('Give 2 checks', 'Give 1 check')}`;
+  return generateJson(g, instruction, `Topic: ${input.topic}`, parseLesson, 0.4);
 }
 
 // ---- Cards from papers and notes ----------------------------------------------

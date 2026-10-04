@@ -155,12 +155,21 @@ export type Quiz = {
   explanation: string;
 };
 
+// A place the learner can go from a lesson: a deeper concept or a neighbouring field.
+export type Direction = { title: string; why: string };
+
 export type LessonContent = {
-  body: string; // short paragraphs separated by blank lines
+  body: string; // paragraphs separated by blank lines; "## " starts a heading, "- " a bullet
   keyPoints: string[];
-  quiz: Quiz;
+  quiz: Quiz; // the first check question (older lessons have only this one)
+  checks?: Quiz[]; // understanding checks
+  deeper?: Direction[]; // suggestions to go deeper
+  broader?: Direction[]; // suggestions to go broader
   cards: { front: string; back: string }[];
 };
+
+// Core lessons follow the course plan; explorations branch off a lesson on request.
+export type LessonKind = 'core' | 'deeper' | 'broader' | 'simpler' | 'question';
 
 export type Lesson = {
   id: number;
@@ -171,4 +180,7 @@ export type Lesson = {
   content: LessonContent | null;
   status: 'planned' | 'done';
   doneAt: string | null;
+  parentId: number | null; // the lesson an exploration branched off
+  kind: LessonKind;
+  prompt: string; // the question asked, for kind 'question'
 };

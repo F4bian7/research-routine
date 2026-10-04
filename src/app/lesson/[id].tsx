@@ -1,26 +1,32 @@
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { LessonBody, QuizView } from '@/components/lesson-view';
+import { Checks, LessonBody } from '@/components/lesson-view';
 import { goBack, ScreenBar } from '@/components/screen-bar';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Button } from '@/components/ui';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useQuery } from '@/data/use-query';
 import type { Db } from '@/db/db';
-import { getLesson } from '@/db/repos/lessons';
+import { getLesson, listExplorations } from '@/db/repos/lessons';
 import { listTopics } from '@/db/repos/topics';
+import { useTheme } from '@/hooks/use-theme';
 
-// A finished lesson, to read again.
+// A finished lesson with everything explored from it, to reread and continue.
 export default function LessonScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const theme = useTheme();
   const load = useCallback(
     async (d: Db) => {
       const lesson = await getLesson(d, Number(id));
-      const topics = await listTopics(d);
-      return { lesson, topic: topics.find((t) => t.id === lesson?.topicId) ?? null };
+      const [topics, explorations] = await Promise.all([
+        listTopics(d),
+        lesson ? listExplorations(d, lesson.id) : [],
+      ]);
+      return { lesson, explorations, topic: topics.find((t) => t.id === lesson?.topicId) ?? null };
     },
     [id]
   );
@@ -35,7 +41,17 @@ export default function LessonScreen() {
           ) : (
             <>
               <LessonBody lesson={data.lesson} topic={data.topic} />
-              {data.lesson.content?.quiz ? <QuizView quiz={data.lesson.content.quiz} onAnswer={() => {}} /> : null}
+              <Checks lesson={data.lesson} onAnswer={() => {}} />
+              {data.explorations.map((e) => (
+                <View key={e.id} style={[styles.block, { borderTopColor: theme.border }]}>
+                  <LessonBody lesson={e} />
+                </View>
+              ))}
+              <Button
+                label="Continue exploring from here"
+                variant="primary"
+                onPress={() => router.push({ pathname: '/learn', params: { lesson: String(data.lesson!.id) } })}
+              />
             </>
           )}
         </ScrollView>
@@ -54,4 +70,5 @@ const styles = StyleSheet.create({
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
   },
+  block: { gap: Spacing.three, paddingTop: Spacing.three, borderTopWidth: StyleSheet.hairlineWidth },
 });

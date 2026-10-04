@@ -56,7 +56,7 @@ async function loadToday(db: Db) {
       getLearnDay(db, today),
       totalXp(db),
       cardCounts(db, today),
-      peekLesson(db, false),
+      peekLesson(db, true),
     ]);
   const task = routine.find((t) => t.weekday === weekdayOf(today)) ?? null;
   let paper = null;
@@ -105,9 +105,9 @@ export default function TodayScreen() {
   });
   const reviews = Math.min(counts.due, MAX_REVIEWS) + Math.min(counts.fresh, MAX_NEW_CARDS);
   const lessonLine = data.nextLesson
-    ? `New lesson: ${data.nextLesson.title}`
+    ? `Next: ${data.nextLesson.title}`
     : data.hasKey && data.hasTopics
-      ? 'A new lesson from your topics'
+      ? 'The next lesson of your course'
       : 'Lessons need the free Gemini key (Settings)';
 
   return (
@@ -138,34 +138,35 @@ export default function TodayScreen() {
             type="backgroundElement"
             style={[styles.card, { borderColor: learned ? theme.success : theme.accent, borderWidth: 2 }]}>
             <ThemedText type="smallBold" themeColor="textSecondary" style={styles.label}>
-              Learn · keeps your streak
+              Learn · the first session keeps your streak
             </ThemedText>
+            <ThemedText style={styles.taskTitle}>{learned ? 'Keep going' : 'Today\u2019s lesson'}</ThemedText>
             {learned ? (
-              <>
-                <ThemedText style={styles.taskTitle}>Session done ✓</ThemedText>
-                <ThemedText themeColor="textSecondary">
-                  +{learnDay?.xp ?? 0} XP today · {learnDay?.reviewed ?? 0}{' '}
-                  {learnDay?.reviewed === 1 ? 'card' : 'cards'} reviewed
+              <ThemedText style={{ color: theme.success }}>
+                Streak kept ✓ +{learnDay?.xp ?? 0} XP today. Another session takes you further.
+              </ThemedText>
+            ) : null}
+            <ThemedText themeColor="textSecondary">📖 {lessonLine}</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              Read it, then go deeper, broader or ask your own questions, as long as you like.
+            </ThemedText>
+            <Pressable
+              onPress={() => router.push({ pathname: '/learn', params: { n: String(Date.now()) } })}
+              style={({ pressed }) => [
+                styles.mainButton,
+                { backgroundColor: theme.accent, opacity: pressed ? 0.7 : 1 },
+              ]}>
+              <ThemedText style={[styles.mainButtonText, { color: theme.onAccent }]}>
+                {learned ? 'Start another session' : 'Start'}
+              </ThemedText>
+            </Pressable>
+            {reviews > 0 ? (
+              <Pressable onPress={() => router.push('/review')} hitSlop={8}>
+                <ThemedText type="small" style={{ color: theme.accent }}>
+                  Optional: {reviews} {reviews === 1 ? 'flashcard' : 'flashcards'} to review
                 </ThemedText>
-                <Button label="Practice more" onPress={() => router.push('/learn')} />
-              </>
-            ) : (
-              <>
-                <ThemedText style={styles.taskTitle}>Today&apos;s session</ThemedText>
-                <ThemedText themeColor="textSecondary">📖 {lessonLine}</ThemedText>
-                <ThemedText themeColor="textSecondary">
-                  🔁 {reviews} {reviews === 1 ? 'card' : 'cards'} to review · about 5 min
-                </ThemedText>
-                <Pressable
-                  onPress={() => router.push('/learn')}
-                  style={({ pressed }) => [
-                    styles.mainButton,
-                    { backgroundColor: theme.accent, opacity: pressed ? 0.7 : 1 },
-                  ]}>
-                  <ThemedText style={[styles.mainButtonText, { color: theme.onAccent }]}>Start</ThemedText>
-                </Pressable>
-              </>
-            )}
+              </Pressable>
+            ) : null}
           </ThemedView>
 
           {task && task.enabled ? (

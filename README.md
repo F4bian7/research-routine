@@ -24,7 +24,7 @@ It ships as an installable web app (PWA) on GitHub Pages:
 | People: links, newest papers (OpenAlex) and Bluesky posts per person | done |
 | Follow in two taps, suggestions from the backlog, people timeline in the feed | done |
 | Brain tab: notes (second brain) with [[links]], highlights from the reader, Obsidian export | done |
-| Learn: daily session with a lesson from a per-topic course and spaced-repetition cards; the streak follows it | done |
+| Learn: tutor sessions (next course lesson, then deeper, broader, simpler or own questions, with checks), any number a day; the first keeps the streak. Flashcards are an optional review | done |
 | Topic goals, focus topic, study packs (`public/packs/`), OpenAlex key and daily cache | done |
 | Feed → Highlights: most cited new papers in all of science, science news, Hacker News, AI trending | done |
 | Voices: people without papers via blog feeds, GitHub, Bluesky and Hacker News mentions | done |
