@@ -1,56 +1,64 @@
-# Welcome to your Expo app 👋
+# Research Routine
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Personal paper app: a daily 5 to 10 minute routine with a streak, a one-item-at-a-time
+backlog, and the people and topics I follow. Expo (SDK 57), TypeScript, Expo Router.
+No backend, no login; all data stays on the phone.
 
-## Get started
+It ships as an installable web app (PWA) on GitHub Pages:
+**https://f4bian7.github.io/research-routine/**
 
-1. Install dependencies
+## Status
 
-   ```bash
-   npm install
-   ```
+| Step | State |
+|---|---|
+| Setup (Expo, TypeScript, navigation, database, seed data) | done |
+| Web app on GitHub Pages, offline, home screen install | done |
+| Tab "Heute" | done |
+| Tab "Backlog" | next |
+| Tab "Themen und Personen" | open |
+| Tab "Einstellungen" (routine, reminder, quick links, JSON export/import) | open |
 
-2. Start the app
+## Install on the iPhone
 
-   ```bash
-   npx expo start
-   ```
+1. Open the URL above in **Safari** (not Chrome; only Safari can add web apps).
+2. Share button, then "Zum Home-Bildschirm".
+3. Start the app from the new icon. It runs full screen and offline.
 
-In the output, you'll find options to open the app in a
+Data lives in the browser storage of the home screen app (SQLite via sql.js, saved to
+IndexedDB). Home screen apps are exempt from Safari's automatic data deletion, but
+removing the icon deletes the data. Use the JSON export as a backup once it exists.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+Updates: every push to `main` deploys automatically. The app picks up the new version on
+the next start while online.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Differences from a native build
 
-## Get a fresh project
+- No share target: copy a link and use "Aus Zwischenablage einfügen" in the backlog.
+- No scheduled local notifications: use an automation in the Shortcuts app instead
+  (time of day, daily, "Run immediately", action "Open app" or "Show notification").
 
-When you're ready, run:
+The native build (Expo Go or a development build) still works from the same code; only
+the database backend differs (`src/db/db-provider.tsx` vs `db-provider.web.tsx`).
+
+## Development
 
 ```bash
-npm run reset-project
+npx expo start --web    # dev server in the browser
+npm test                # streak logic unit tests
+npx tsc --noEmit        # typecheck
+npx expo lint
+npm run build:web       # production web build into dist/
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Layout
 
-### Other setup steps
+- `src/app/` screens (one file per tab)
+- `src/components/` UI pieces (`app-tabs.web.tsx` is the web tab bar)
+- `src/db/` schema and migrations, seed data, one repo per entity (no React), `Db` interface
+  with a native (expo-sqlite) and a web (sql.js + IndexedDB) backend
+- `src/domain/` pure logic: local-time date keys, streak rule
+- `src/data/` `useQuery` hook and change notification between repos and screens
+- `public/` sql.js runtime, web manifest, icons
+- `scripts/build-web.mjs` export plus PWA patching and service worker
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+The streak is computed from the `completions` table on every render, never stored.
