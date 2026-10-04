@@ -15,13 +15,30 @@ export type PersonLinks = {
   website?: string;
 };
 
+// One OpenAlex author profile. OpenAlex often splits a researcher into several
+// profiles (other institution, spelling), so a person can have many.
+export type AuthorProfile = {
+  id: string; // e.g. "A5072647800"
+  name: string;
+  institutions: string[];
+  works: number;
+  citations: number;
+  topic: string;
+  orcid: string | null;
+};
+
 export type Person = {
   id: number;
   name: string;
   institution: string;
   topicIds: number[];
   links: PersonLinks;
-  openalexId: string | null; // e.g. "A5072647800"
+  openalexIds: string[]; // every profile that belongs to this person
+  orcid: string | null; // stays with the person across institutions
+  blueskyDid: string | null; // stays when the Bluesky handle changes
+  ignoredIds: string[]; // profiles the user said are someone else
+  pendingProfiles: AuthorProfile[]; // found later, waiting for "same person?"
+  checkedAt: string | null; // last search for new profiles
 };
 
 export type PaperType = 'survey' | 'milestone' | 'best_paper' | 'challenge' | 'other';

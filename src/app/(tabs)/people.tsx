@@ -9,11 +9,10 @@ import { Button, Chip, Field, Row } from '@/components/ui';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useQuery } from '@/data/use-query';
 import { type Db, useDb } from '@/db/db';
-import { suggestPeople } from '@/data/people';
+import { type Suggestion, suggestPeople } from '@/data/people';
 import { listPeople } from '@/db/repos/people';
 import { addTopic, deleteTopic, listTopics, updateTopic } from '@/db/repos/topics';
 import type { Person, Topic } from '@/db/types';
-import type { CoAuthor } from '@/sources/openalex';
 import { useTheme } from '@/hooks/use-theme';
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#64748B'];
@@ -71,6 +70,11 @@ function PersonRow({ person, topics }: { person: Person; topics: Topic[] }) {
             {person.institution}
           </ThemedText>
         ) : null}
+        {person.pendingProfiles.length > 0 ? (
+          <ThemedText type="small" style={{ color: theme.accent }}>
+            New entry found, same person?
+          </ThemedText>
+        ) : null}
       </View>
       <View style={styles.dots}>
         {person.topicIds.map((id) => {
@@ -86,7 +90,7 @@ function PersonRow({ person, topics }: { person: Person; topics: Topic[] }) {
 // Authors who show up most in the backlog, with a one-tap follow.
 function Suggestions({ followedCount }: { followedCount: number }) {
   const db = useDb();
-  const [list, setList] = useState<CoAuthor[] | null>(null);
+  const [list, setList] = useState<Suggestion[] | null>(null);
   useEffect(() => {
     let alive = true;
     suggestPeople(db)
@@ -116,7 +120,7 @@ function Suggestions({ followedCount }: { followedCount: number }) {
             onPress={() =>
               router.push({
                 pathname: '/person/follow',
-                params: { id: a.id, name: a.name, institution: a.institution },
+                params: { name: a.name, ids: a.ids.join(',') },
               })
             }
           />

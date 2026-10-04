@@ -9,12 +9,13 @@ import { Button, Chip, Field, Row } from '@/components/ui';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useQuery } from '@/data/use-query';
 import { type Db, useDb } from '@/db/db';
-import { addPerson, deletePerson, getPerson, updatePerson } from '@/db/repos/people';
+import { checkProfiles } from '@/data/people';
+import { addPerson, deletePerson, getPerson, newPerson, updatePerson } from '@/db/repos/people';
 import { listTopics } from '@/db/repos/topics';
 import type { Person, PersonLinks } from '@/db/types';
-import { LINK_LABEL } from '@/domain/person-links';
+import { blueskyHandle, LINK_LABEL } from '@/domain/person-links';
 import { useTheme } from '@/hooks/use-theme';
-import { type AuthorCandidate, searchAuthors } from '@/sources/openalex';
+import { resolveDid } from '@/sources/bluesky';
 
 const LINK_HINT: Record<keyof PersonLinks, string> = {
   scholar: 'Profile link',
@@ -36,45 +37,23 @@ function Form({ person, topics }: { person: Person | null; topics: { id: number;
   const [institution, setInstitution] = useState(person?.institution ?? '');
   const [topicIds, setTopicIds] = useState<number[]>(person?.topicIds ?? []);
   const [links, setLinks] = useState<PersonLinks>(person?.links ?? {});
-  const [openalexId, setOpenalexId] = useState<string | null>(person?.openalexId ?? null);
-  const [candidates, setCandidates] = useState<AuthorCandidate[] | null>(null);
   const [status, setStatus] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  async function find() {
-    if (!name.trim()) return setStatus('Enter a name first.');
-    setStatus('Searching OpenAlex …');
-    try {
-      const found = await searchAuthors(name.trim());
-      setCandidates(found);
-      setStatus(found.length ? 'Which one is it?' : 'Nobody found under this name.');
-    } catch {
-      setStatus('Could not reach OpenAlex. Are you online?');
-    }
-  }
-
-  function pick(c: AuthorCandidate) {
-    setOpenalexId(c.id);
-    if (!institution.trim() && c.institutions[0]) setInstitution(c.institutions[0]);
-    setCandidates(null);
-    setStatus(`Linked to ${c.name} (${c.works} works).`);
-  }
-
   async function save() {
-    const input = {
-      name: name.trim(),
-      institution: institution.trim(),
-      topicIds,
-      links: Object.fromEntries(
-        Object.entries(links).filter(([, v]) => typeof v === 'string' && v.trim())
-      ) as PersonLinks,
-      openalexId,
-    };
+    const cleanLinks = Object.fromEntries(
+      Object.entries(links).filter(([, v]) => typeof v === 'string' && v.trim())
+    ) as PersonLinks;
+    // A new or changed Bluesky handle is resolved to its permanent account id.
+    const handle = blueskyHandle(cleanLinks.bluesky);
+    const handleChanged = handle !== blueskyHandle(person?.links.bluesky);
+    const blueskyDid = !handle ? null : handleChanged ? await resolveDid(handle) : (person?.blueskyDid ?? null);
+    const fields = { name: name.trim(), institution: institution.trim(), topicIds, links: cleanLinks, blueskyDid };
     if (person) {
-      await updatePerson(db, { ...person, ...input });
+      await updatePerson(db, { ...person, ...fields });
       goBack();
     } else {
-      const id = await addPerson(db, input);
+      const id = await addPerson(db, newPerson(fields));
       router.replace({ pathname: '/person/[id]', params: { id: String(id) } });
     }
   }
@@ -99,35 +78,29 @@ function Form({ person, topics }: { person: Person | null; topics: { id: number;
 
         <View style={styles.block}>
           <ThemedText type="small" themeColor="textSecondary">
-            {openalexId
-              ? 'Papers come from OpenAlex. Search again to pick someone else.'
-              : 'Link the person to OpenAlex to see their newest papers in the app.'}
+            {person && person.openalexIds.length > 0
+              ? `Linked to ${person.openalexIds.length} OpenAlex ${person.openalexIds.length === 1 ? 'entry' : 'entries'}${person.orcid ? ' and an ORCID' : ''}.`
+              : 'Not linked to any papers. To see someone\'s papers, use "+ Follow" in People instead.'}
           </ThemedText>
-          <Row>
-            <Button label={openalexId ? 'Search again' : 'Find papers on OpenAlex'} onPress={find} />
-            {openalexId ? (
-              <Button label="Unlink" variant="ghost" onPress={() => setOpenalexId(null)} />
-            ) : null}
-          </Row>
+          {person && person.openalexIds.length > 0 ? (
+            <Button
+              label="Look for new entries now"
+              onPress={async () => {
+                setStatus('Searching OpenAlex …');
+                try {
+                  const p = await checkProfiles(db, { ...person, name: name.trim() || person.name });
+                  setStatus(
+                    p.pendingProfiles.length
+                      ? `${p.pendingProfiles.length} possible entries, confirm them on the person page.`
+                      : 'Nothing new found.'
+                  );
+                } catch {
+                  setStatus('Could not reach OpenAlex. Are you online?');
+                }
+              }}
+            />
+          ) : null}
           {status ? <ThemedText type="small">{status}</ThemedText> : null}
-          {candidates?.map((c) => (
-            <Pressable
-              key={c.id}
-              onPress={() => pick(c)}
-              style={({ pressed }) => [styles.candidate, { borderColor: theme.border, opacity: pressed ? 0.6 : 1 }]}>
-              <ThemedText type="smallBold">{c.name}</ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                {[c.institutions.slice(0, 2).join(', '), `${c.works} works`, `${c.citations} citations`]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </ThemedText>
-              {c.topic ? (
-                <ThemedText type="small" themeColor="textSecondary">
-                  {c.topic}
-                </ThemedText>
-              ) : null}
-            </Pressable>
-          ))}
         </View>
 
         <ThemedText type="small" themeColor="textSecondary">
@@ -214,5 +187,4 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   block: { gap: Spacing.two },
-  candidate: { borderWidth: 1, borderRadius: Spacing.two, padding: Spacing.two, gap: 2 },
 });

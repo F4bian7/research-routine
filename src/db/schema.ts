@@ -100,6 +100,17 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE people ADD COLUMN openalex_id TEXT;
   `,
+  // People may have several OpenAlex profiles; ORCID and Bluesky DID keep them
+  // findable when they move institution or change their handle.
+  `
+  ALTER TABLE people ADD COLUMN openalex_ids TEXT NOT NULL DEFAULT '[]';
+  ALTER TABLE people ADD COLUMN orcid TEXT;
+  ALTER TABLE people ADD COLUMN bluesky_did TEXT;
+  ALTER TABLE people ADD COLUMN openalex_ignored TEXT NOT NULL DEFAULT '[]';
+  ALTER TABLE people ADD COLUMN openalex_pending TEXT NOT NULL DEFAULT '[]';
+  ALTER TABLE people ADD COLUMN checked_at TEXT;
+  UPDATE people SET openalex_ids = '["' || openalex_id || '"]' WHERE openalex_id IS NOT NULL;
+  `,
 ];
 
 export async function migrateAndSeed(db: Db) {

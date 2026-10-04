@@ -15,9 +15,9 @@ import { ThemedView } from '@/components/themed-view';
 import { Button, Chip, Row } from '@/components/ui';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { loadBluesky, loadNewPapers, loadTrending, NEW_PAPERS_DAYS } from '@/data/feeds';
-import { loadTimeline, type Timeline } from '@/data/people';
+import { checkDuePeople, loadTimeline, peopleKey, type Timeline } from '@/data/people';
 import { useQuery } from '@/data/use-query';
-import type { Db } from '@/db/db';
+import { type Db, useDb } from '@/db/db';
 import { getFeedDecisions } from '@/db/repos/feed';
 import { listPeople } from '@/db/repos/people';
 import { getSettings } from '@/db/repos/settings';
@@ -70,13 +70,19 @@ export default function FeedScreen() {
   const [topicId, setTopicId] = useState<number | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const db = useDb();
+
+  // Once a week per person, look for OpenAlex entries that appeared since following.
+  useEffect(() => {
+    if (tab === 'people') checkDuePeople(db).catch(() => undefined);
+  }, [tab, db]);
 
   const key = ctx
     ? [
         tab,
         ctx.topics.map((t) => `${t.id}=${t.keywords}`).join(','),
         ctx.settings.blueskySource,
-        ctx.people.map((p) => `${p.id}:${p.openalexId}:${p.links.bluesky ?? ''}`).join(','),
+        peopleKey(ctx.people),
       ].join('|')
     : null;
 

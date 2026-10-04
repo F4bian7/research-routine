@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -7,63 +7,90 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button, Field } from '@/components/ui';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { blueskyCandidates, candidateInstitution, followAuthor } from '@/data/people';
+import { blueskyCandidates, followProfiles, likelySame, setBluesky } from '@/data/people';
 import { useDb } from '@/db/db';
-import { getPerson, updatePerson } from '@/db/repos/people';
+import { getPerson } from '@/db/repos/people';
+import type { AuthorProfile } from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
 import type { BlueskyActor } from '@/sources/bluesky';
-import { type AuthorCandidate, searchAuthors } from '@/sources/openalex';
+import { searchAuthors } from '@/sources/openalex';
 
 function goBack() {
   if (router.canGoBack()) router.back();
   else router.replace('/people');
 }
 
-// Follow someone in two taps: pick the researcher, then confirm their Bluesky account.
-// Also reached from a suggestion, with the OpenAlex id and name already known.
+// Follow someone: search the name, tick every profile that is this person (OpenAlex
+// often splits one researcher by institution), then confirm their Bluesky account.
+// From a suggestion, `name` and `ids` arrive in the route and the search runs at once.
 export default function FollowScreen() {
-  const params = useLocalSearchParams<{ id?: string; name?: string; institution?: string }>();
+  const params = useLocalSearchParams<{ name?: string; ids?: string }>();
   const db = useDb();
   const theme = useTheme();
   const [query, setQuery] = useState(params.name ?? '');
-  const [results, setResults] = useState<AuthorCandidate[] | null>(null);
-  const [status, setStatus] = useState('');
+  const [results, setResults] = useState<AuthorProfile[] | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [status, setStatus] = useState(params.name ? 'Searching …' : '');
   const [personId, setPersonId] = useState<number | null>(null);
   const [personName, setPersonName] = useState('');
   const [accounts, setAccounts] = useState<BlueskyActor[] | null>(null);
   const [handle, setHandle] = useState('');
 
-  async function search() {
-    if (!query.trim()) return;
-    setStatus('Searching …');
-    setResults(null);
-    try {
-      const found = await searchAuthors(query.trim());
-      setResults(found);
-      setStatus(found.length ? '' : 'Nobody found. Check the spelling.');
-    } catch {
-      setStatus('Could not reach OpenAlex. Are you online?');
-    }
+  function applyResults(found: AuthorProfile[], preselect: string[]) {
+    setResults(found);
+    const main = found.find((f) => preselect.includes(f.id)) ?? found[0];
+    setSelected(main ? [...new Set([...preselect, main.id, ...likelySame(main, found)])] : []);
+    setStatus(found.length ? '' : 'Nobody found. Check the spelling.');
   }
 
-  async function follow(a: { id: string; name: string; institution: string }) {
-    setStatus(`Following ${a.name} …`);
-    const id = await followAuthor(db, a);
+  function search(name: string) {
+    if (!name.trim()) return;
+    setStatus('Searching …');
+    setResults(null);
+    searchAuthors(name.trim())
+      .then((found) => applyResults(found, []))
+      .catch(() => setStatus('Could not reach OpenAlex. Are you online?'));
+  }
+
+  // Coming from a suggestion: search right away with its entries ticked.
+  useEffect(() => {
+    if (!params.name) return;
+    let alive = true;
+    const preselect = params.ids ? params.ids.split(',') : [];
+    searchAuthors(params.name.trim())
+      .then((found) => alive && applyResults(found, preselect))
+      .catch(() => alive && setStatus('Could not reach OpenAlex. Are you online?'));
+    return () => {
+      alive = false;
+    };
+    // Runs once for the route parameters it was opened with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function toggle(id: string) {
+    setSelected(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
+  }
+
+  async function follow() {
+    const chosen = (results ?? []).filter((r) => selected.includes(r.id));
+    if (chosen.length === 0) return;
+    setStatus('Following …');
+    const id = await followProfiles(db, chosen);
+    const name = [...chosen].sort((a, b) => b.works - a.works)[0].name;
     setPersonId(id);
-    setPersonName(a.name);
+    setPersonName(name);
     setStatus('');
-    setAccounts(await blueskyCandidates(a.name).catch(() => []));
+    setAccounts(await blueskyCandidates(name).catch(() => []));
   }
 
   async function finish(chosen: string | null) {
-    if (personId !== null && chosen) {
-      const p = await getPerson(db, personId);
-      if (p) await updatePerson(db, { ...p, links: { ...p.links, bluesky: chosen } });
-    }
-    if (personId !== null) {
-      router.replace({ pathname: '/person/[id]', params: { id: String(personId) } });
-    }
+    if (personId === null) return;
+    const person = await getPerson(db, personId);
+    if (person && chosen) await setBluesky(db, person, chosen);
+    router.replace({ pathname: '/person/[id]', params: { id: String(personId) } });
   }
+
+  const count = selected.length;
 
   return (
     <ThemedView style={styles.container}>
@@ -83,50 +110,65 @@ export default function FollowScreen() {
                 label="Name of the researcher"
                 value={query}
                 onChangeText={setQuery}
-                onSubmitEditing={search}
+                onSubmitEditing={() => search(query)}
                 returnKeyType="search"
                 autoCorrect={false}
-                autoFocus={!params.id}
+                autoFocus={!params.name}
                 placeholder="e.g. Fabian Isensee"
               />
-              {params.id ? (
-                <Button
-                  label={`Follow ${params.name}`}
-                  variant="primary"
-                  onPress={() =>
-                    follow({ id: params.id!, name: params.name ?? '', institution: params.institution ?? '' })
-                  }
-                />
-              ) : (
-                <Button label="Search" variant="primary" onPress={search} />
-              )}
+              <Button label="Search" onPress={() => search(query)} />
               {status ? <ThemedText type="small">{status}</ThemedText> : null}
-              {results?.map((c) => (
-                <Pressable
-                  key={c.id}
-                  onPress={() => follow({ id: c.id, name: c.name, institution: candidateInstitution(c) })}
-                  style={({ pressed }) => [
-                    styles.card,
-                    { borderColor: theme.border, opacity: pressed ? 0.6 : 1 },
-                  ]}>
-                  <View style={styles.flex}>
-                    <ThemedText style={styles.bold}>{c.name}</ThemedText>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      {c.institutions.slice(0, 2).join(', ') || 'No institution known'}
-                    </ThemedText>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      {[`${c.works} papers`, `${c.citations} citations`, c.topic].filter(Boolean).join(' · ')}
-                    </ThemedText>
-                  </View>
-                  <ThemedText style={[styles.bold, { color: theme.accent }]}>Follow</ThemedText>
-                </Pressable>
-              ))}
-              {results && results.length > 1 ? (
+
+              {results && results.length > 0 && (
                 <ThemedText type="small" themeColor="textSecondary">
-                  Several profiles for one name are common; the one with the most papers is usually
-                  the right one.
+                  OpenAlex sometimes lists one person several times, for example once per
+                  institution. Tick every entry that is the same person; the app then shows the
+                  papers of all of them, and it keeps looking for new entries later.
                 </ThemedText>
-              ) : null}
+              )}
+              {results?.map((c) => {
+                const on = selected.includes(c.id);
+                return (
+                  <Pressable
+                    key={c.id}
+                    onPress={() => toggle(c.id)}
+                    style={({ pressed }) => [
+                      styles.card,
+                      {
+                        borderColor: on ? theme.accent : theme.border,
+                        borderWidth: on ? 2 : 1,
+                        opacity: pressed ? 0.6 : 1,
+                      },
+                    ]}>
+                    <View
+                      style={[
+                        styles.check,
+                        { borderColor: on ? theme.accent : theme.border, backgroundColor: on ? theme.accent : 'transparent' },
+                      ]}>
+                      {on ? <ThemedText style={{ color: theme.onAccent }}>✓</ThemedText> : null}
+                    </View>
+                    <View style={styles.flex}>
+                      <ThemedText style={styles.bold}>{c.name}</ThemedText>
+                      <ThemedText type="small" themeColor="textSecondary">
+                        {c.institutions.slice(0, 2).join(', ') || 'No institution known'}
+                      </ThemedText>
+                      <ThemedText type="small" themeColor="textSecondary">
+                        {[`${c.works} papers`, `${c.citations} citations`, c.topic, c.orcid ? 'ORCID' : '']
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </ThemedText>
+                    </View>
+                  </Pressable>
+                );
+              })}
+              {results && results.length > 0 && (
+                <Button
+                  label={count <= 1 ? 'Follow' : `Follow (${count} entries, one person)`}
+                  variant="primary"
+                  disabled={count === 0}
+                  onPress={follow}
+                />
+              )}
             </>
           ) : accounts === null ? (
             <ThemedText themeColor="textSecondary">Looking for {personName} on Bluesky …</ThemedText>
@@ -140,11 +182,11 @@ export default function FollowScreen() {
               ) : null}
               {accounts.map((a) => (
                 <Pressable
-                  key={a.handle}
+                  key={a.did}
                   onPress={() => finish(a.handle)}
                   style={({ pressed }) => [
                     styles.card,
-                    { borderColor: theme.border, opacity: pressed ? 0.6 : 1 },
+                    { borderColor: theme.border, borderWidth: 1, opacity: pressed ? 0.6 : 1 },
                   ]}>
                   {a.avatar ? <Image source={{ uri: a.avatar }} style={styles.avatar} /> : null}
                   <View style={styles.flex}>
@@ -203,9 +245,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.three,
-    borderWidth: 1,
     borderRadius: Spacing.three,
     padding: Spacing.three,
+  },
+  check: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   flex: { flex: 1, gap: 2 },
   bold: { fontWeight: 700 },

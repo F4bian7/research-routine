@@ -4,7 +4,7 @@ import { parseKeywords } from './keywords';
 function normalize(s: string) {
   return s
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
 }
 
@@ -33,4 +33,13 @@ export function matchTopics(topics: Topic[], texts: string[], min = 2): number[]
       return hits >= min;
     })
     .map((t) => t.id);
+}
+
+// For comparing person names: no accents, no case, no dots or extra spaces.
+// "B. Van Ginneken" and "b van ginneken" are equal; "Knöll" equals "Knoll".
+export function normalizeName(name: string) {
+  return normalize(name)
+    .replace(/[.,-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }

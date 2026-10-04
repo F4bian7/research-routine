@@ -5,7 +5,7 @@ const API = 'https://api.bsky.app/xrpc';
 
 type PostView = {
   uri: string;
-  author: { handle: string; displayName?: string; avatar?: string };
+  author: { did: string; handle: string; displayName?: string; avatar?: string };
   record: {
     text?: string;
     createdAt?: string;
@@ -29,6 +29,7 @@ export function toPost(p: PostView): BlueskyPost {
     url: `https://bsky.app/profile/${p.author.handle}/post/${rkey}`,
     author: p.author.displayName || p.author.handle,
     handle: p.author.handle,
+    did: p.author.did,
     avatar: p.author.avatar,
     text: p.record.text ?? '',
     createdAt: p.record.createdAt ?? p.indexedAt ?? '',
@@ -83,7 +84,7 @@ export function parseHandles(source: string): string[] {
   return source
     .split(/[\s,]+/)
     .map((h) => h.replace(/^@/, '').replace(/^https:\/\/bsky\.app\/profile\//, '').replace(/\/$/, ''))
-    .filter((h) => h.includes('.'));
+    .filter((h) => h.includes('.') || h.startsWith('did:'));
 }
 
 // The user's own source: one list URL, or a set of accounts merged by time.
@@ -110,11 +111,18 @@ export async function followedPosts(source: string): Promise<BlueskyPost[]> {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-export type BlueskyActor = { handle: string; name: string; description: string; avatar?: string };
+export type BlueskyActor = {
+  did: string;
+  handle: string;
+  name: string;
+  description: string;
+  avatar?: string;
+};
 
-type ActorView = { handle: string; displayName?: string; description?: string; avatar?: string };
+type ActorView = { did: string; handle: string; displayName?: string; description?: string; avatar?: string };
 
 const toActor = (a: ActorView): BlueskyActor => ({
+  did: a.did,
   handle: a.handle,
   name: a.displayName || a.handle,
   description: a.description ?? '',
@@ -138,7 +146,18 @@ export async function getProfiles(handles: string[]): Promise<Map<string, Bluesk
     const res = await fetch(`${API}/app.bsky.actor.getProfiles?${params}`);
     if (!res.ok) continue;
     const data = (await res.json()) as { profiles: ActorView[] };
-    for (const p of data.profiles) out.set(p.handle, toActor(p));
+    for (const p of data.profiles) {
+      out.set(p.handle, toActor(p));
+      out.set(p.did, toActor(p));
+    }
   }
   return out;
+}
+
+// The permanent account id behind a handle; handles can change, DIDs do not.
+export async function resolveDid(handle: string): Promise<string | null> {
+  if (handle.startsWith('did:')) return handle;
+  return get<{ did: string }>('com.atproto.identity.resolveHandle', { handle })
+    .then((r) => r.did)
+    .catch(() => null);
 }

@@ -11,6 +11,7 @@ export type FeedPaper = {
   topicId: number | null;
   upvotes?: number;
   authorIds?: string[]; // OpenAlex author ids, for the people timeline
+  authorOrcids?: string[];
 };
 
 export type BlueskyPost = {
@@ -18,6 +19,7 @@ export type BlueskyPost = {
   url: string; // bsky.app link
   author: string;
   handle: string;
+  did: string;
   avatar?: string;
   text: string;
   createdAt: string;

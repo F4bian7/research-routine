@@ -1,3 +1,4 @@
+import type { AuthorProfile } from '@/db/types';
 import type { FeedPaper } from './feed-types';
 import type { PaperRef } from './links';
 
@@ -19,7 +20,7 @@ type Work = {
   publication_year?: number;
   abstract_inverted_index?: Record<string, number[]> | null;
   authorships?: {
-    author: { id?: string; display_name: string };
+    author: { id?: string; display_name: string; orcid?: string | null };
     institutions?: { display_name: string }[];
   }[];
   primary_location?: { source?: { display_name?: string } | null } | null;
@@ -72,6 +73,7 @@ export function workToFeedPaper(w: Work, topicId: number | null): FeedPaper {
     venue: arxiv ? 'arXiv' : (w.primary_location?.source?.display_name ?? ''),
     topicId,
     authorIds: (w.authorships ?? []).map((a) => shortId(a.author.id ?? '')).filter(Boolean),
+    authorOrcids: (w.authorships ?? []).map((a) => a.author.orcid ?? '').filter(Boolean),
   };
 }
 
@@ -102,14 +104,7 @@ export async function searchRecent(
   return (data.results ?? []).map((w) => workToFeedPaper(w, topicId)).filter((p) => p.title);
 }
 
-export type AuthorCandidate = {
-  id: string; // short id, e.g. "A5072647800"
-  name: string;
-  institutions: string[];
-  works: number;
-  citations: number;
-  topic: string;
-};
+export type AuthorCandidate = AuthorProfile;
 
 type AuthorRow = {
   id: string;
@@ -118,12 +113,13 @@ type AuthorRow = {
   works_count?: number;
   cited_by_count?: number;
   topics?: { display_name: string }[] | null;
+  orcid?: string | null;
 };
 
 export async function searchAuthors(name: string): Promise<AuthorCandidate[]> {
   const url =
     `https://api.openalex.org/authors?search=${encodeURIComponent(name)}&per_page=6` +
-    '&select=id,display_name,last_known_institutions,works_count,cited_by_count,topics';
+    '&select=id,display_name,last_known_institutions,works_count,cited_by_count,topics,orcid';
   const res = await fetch(url);
   if (!res.ok) throw new Error(`OpenAlex ${res.status}`);
   const data = (await res.json()) as { results?: AuthorRow[] };
@@ -136,6 +132,7 @@ export async function searchAuthors(name: string): Promise<AuthorCandidate[]> {
     works: a.works_count ?? 0,
     citations: a.cited_by_count ?? 0,
     topic: a.topics?.[0]?.display_name ?? '',
+    orcid: a.orcid ?? null,
   }))
     .sort((x, y) => y.works - x.works);
 }
@@ -151,11 +148,20 @@ export async function authorWorks(authorId: string): Promise<FeedPaper[]> {
   return (data.results ?? []).map((w) => workToFeedPaper(w, null)).filter((p) => p.title);
 }
 
-// Newest works of several authors at once (OpenAlex allows up to 50 ids per filter).
+// Newest works of several authors at once (OpenAlex allows up to 50 values per filter).
 export async function worksByAuthors(authorIds: string[], perPage = 50): Promise<FeedPaper[]> {
-  if (authorIds.length === 0) return [];
+  return worksBy('author.id', authorIds, perPage);
+}
+
+// By ORCID: also finds papers OpenAlex filed under a profile the user does not know yet.
+export async function worksByOrcids(orcids: string[], perPage = 50): Promise<FeedPaper[]> {
+  return worksBy('author.orcid', orcids, perPage);
+}
+
+async function worksBy(field: string, values: string[], perPage: number): Promise<FeedPaper[]> {
+  if (values.length === 0) return [];
   const url =
-    `https://api.openalex.org/works?filter=author.id:${authorIds.slice(0, 50).join('|')}` +
+    `https://api.openalex.org/works?filter=${field}:${values.slice(0, 50).map(encodeURIComponent).join('|')}` +
     `&sort=publication_date:desc&per_page=${perPage}&select=${SELECT}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`OpenAlex ${res.status}`);

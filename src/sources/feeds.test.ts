@@ -59,7 +59,7 @@ test('Hugging Face daily paper', () => {
 test('Bluesky post finds the paper link in a facet', () => {
   const post = toPost({
     uri: 'at://did:plc:x/app.bsky.feed.post/abc',
-    author: { handle: 'bot.bsky.social' },
+    author: { did: 'did:plc:x', handle: 'bot.bsky.social' },
     record: {
       text: 'New paper arxiv.org/abs/2610…',
       createdAt: '2026-10-03T08:00:00Z',

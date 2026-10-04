@@ -7,19 +7,27 @@ import { BlueskyPostCard, bskyKey, FeedMessage, FeedPaperCard } from '@/componen
 import { openUrl } from '@/components/link-button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Chip, Row } from '@/components/ui';
+import { Button, Chip, Row } from '@/components/ui';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import {
+  blueskyActor,
+  checkProfiles,
+  needsCheck,
+  peopleKey,
+  resolvePending,
+  worksForPeople,
+} from '@/data/people';
 import { useQuery } from '@/data/use-query';
-import type { Db } from '@/db/db';
+import { type Db, useDb } from '@/db/db';
 import { getFeedDecisions } from '@/db/repos/feed';
 import { getPerson } from '@/db/repos/people';
 import { listTopics } from '@/db/repos/topics';
 import type { PersonLinks } from '@/db/types';
-import { blueskyHandle, LINK_LABEL, linkFor, scholarSearchUrl } from '@/domain/person-links';
+import { LINK_LABEL, linkFor, scholarSearchUrl } from '@/domain/person-links';
 import { useTheme } from '@/hooks/use-theme';
 import { followedPosts } from '@/sources/bluesky';
 import type { BlueskyPost, FeedPaper } from '@/sources/feed-types';
-import { authorWorks } from '@/sources/openalex';
+
 
 type Loaded<T> = { key: string; items: T[] | null }; // items null = failed
 
@@ -31,6 +39,7 @@ function goBack() {
 export default function PersonScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
+  const db = useDb();
   const load = useCallback(
     async (d: Db) => {
       const [person, topics, decisions] = await Promise.all([
@@ -47,19 +56,29 @@ export default function PersonScreen() {
   const [papers, setPapers] = useState<Loaded<FeedPaper> | null>(null);
   const [posts, setPosts] = useState<Loaded<BlueskyPost> | null>(null);
 
-  const authorId = data?.person?.openalexId ?? null;
-  const handle = blueskyHandle(data?.person?.links.bluesky);
+  const person0 = data?.person ?? null;
+  const authorKey = person0 && (person0.openalexIds.length || person0.orcid) ? peopleKey([person0]) : null;
+  const handle = person0 ? blueskyActor(person0) : null;
 
   useEffect(() => {
-    if (!authorId) return;
+    if (!person0 || !authorKey) return;
     let alive = true;
-    authorWorks(authorId)
-      .then((items) => alive && setPapers({ key: authorId, items }))
-      .catch(() => alive && setPapers({ key: authorId, items: null }));
+    worksForPeople([person0], 25)
+      .then((items) => alive && setPapers({ key: authorKey, items }))
+      .catch(() => alive && setPapers({ key: authorKey, items: null }));
     return () => {
       alive = false;
     };
-  }, [authorId]);
+    // Refetch when the linked profiles change, not on every other edit of the person.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authorKey]);
+
+  // Look for new OpenAlex entries of this person at most once a week.
+  useEffect(() => {
+    if (person0 && person0.openalexIds.length > 0 && needsCheck(person0)) {
+      checkProfiles(db, person0).catch(() => undefined);
+    }
+  }, [person0, db]);
 
   useEffect(() => {
     if (!handle || tab !== 'bluesky') return;
@@ -76,7 +95,7 @@ export default function PersonScreen() {
   const { person, topics, decisions } = data;
 
   const linkKinds = (Object.keys(LINK_LABEL) as (keyof PersonLinks)[]).filter((k) => person?.links[k]);
-  const currentPapers = papers?.key === authorId ? papers.items : undefined;
+  const currentPapers = papers?.key === authorKey ? papers.items : undefined;
   const currentPosts = posts?.key === handle ? posts.items : undefined;
 
   return (
@@ -132,13 +151,41 @@ export default function PersonScreen() {
               ) : null}
             </Row>
 
+            {person.pendingProfiles.map((c) => (
+              <View key={c.id} style={[styles.pending, { borderColor: theme.accent }]}>
+                <ThemedText type="smallBold">New entry found. Is this {person.name} too?</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {[c.name, c.institutions.slice(0, 2).join(', '), `${c.works} papers`, c.topic]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </ThemedText>
+                <Row>
+                  <Button label="Same person" variant="primary" onPress={() => resolvePending(db, person, c.id, true)} />
+                  <Button label="Someone else" variant="ghost" onPress={() => resolvePending(db, person, c.id, false)} />
+                </Row>
+              </View>
+            ))}
+
+            <ThemedText type="small" themeColor="textSecondary">
+              {[
+                person.openalexIds.length === 1
+                  ? 'Papers from 1 OpenAlex entry'
+                  : `Papers from ${person.openalexIds.length} OpenAlex entries`,
+                person.orcid ? 'plus everything under their ORCID' : '',
+                'checked for new entries weekly',
+              ]
+                .filter(Boolean)
+                .join(', ')}
+              .
+            </ThemedText>
+
             <Row>
               <Chip label="Papers" selected={tab === 'papers'} onPress={() => setTab('papers')} />
               <Chip label="Bluesky" selected={tab === 'bluesky'} onPress={() => setTab('bluesky')} />
             </Row>
 
             {tab === 'papers' ? (
-              !authorId ? (
+              !authorKey ? (
                 <FeedMessage text='Not linked to OpenAlex yet. Tap "Edit", then "Find papers on OpenAlex".' />
               ) : currentPapers === undefined ? (
                 <FeedMessage text="Loading …" />
@@ -191,4 +238,5 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, lineHeight: 34, fontWeight: 700 },
   topic: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
   swatch: { width: 10, height: 10, borderRadius: 5 },
+  pending: { borderWidth: 1.5, borderRadius: Spacing.three, padding: Spacing.three, gap: Spacing.two },
 });
