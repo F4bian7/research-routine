@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -12,7 +12,7 @@ import { type Db, useDb } from '@/db/db';
 import { cardCounts, deleteCard, listCards, updateCard } from '@/db/repos/cards';
 import { addSyllabus, deleteSyllabus, listLessons } from '@/db/repos/lessons';
 import { getSettings } from '@/db/repos/settings';
-import type { Card, Topic } from '@/db/types';
+import type { Card, Lesson, Topic } from '@/db/types';
 import { todayKey } from '@/domain/dates';
 import { intervalLabel } from '@/domain/srs';
 import { useTheme } from '@/hooks/use-theme';
@@ -49,29 +49,127 @@ function SuggestedCard({ card }: { card: Card }) {
   );
 }
 
-export function CardsView({ topics }: { topics: Topic[] }) {
+// One topic's course: plan it, see the lessons, reread finished ones.
+function CourseCard({ topic, lessons, hasKey }: { topic: Topic; lessons: Lesson[]; hasKey: boolean }) {
   const db = useDb();
   const theme = useTheme();
-  const data = useQuery(load);
-  const [busy, setBusy] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [seconds, setSeconds] = useState(0);
   const [status, setStatus] = useState('');
-  const [showAll, setShowAll] = useState(false);
-  if (!data) return null;
-  const { counts, suggested, active, lessons, hasKey } = data;
+  const [justPlanned, setJustPlanned] = useState(false);
+  const [open, setOpen] = useState(false);
+  const done = lessons.filter((l) => l.status === 'done');
+  const next = lessons.find((l) => l.status === 'planned');
 
-  async function createCourse(t: Topic) {
+  // Planning takes a few seconds up to half a minute; show that it is working.
+  useEffect(() => {
+    if (!busy) return;
+    const start = Date.now();
+    const timer = setInterval(() => setSeconds(Math.round((Date.now() - start) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [busy]);
+
+  async function plan() {
     const g = await getGemini(db);
-    if (!g) return;
-    setBusy(t.id);
+    if (!g) return setStatus('Add the free Gemini key in Settings first.');
+    setSeconds(0);
+    setBusy(true);
     setStatus('');
     try {
-      await addSyllabus(db, t.id, await makeSyllabus(g, t));
+      await addSyllabus(db, topic.id, await makeSyllabus(g, topic));
+      setJustPlanned(true);
+      setOpen(true);
     } catch (e) {
       setStatus(explainError(e));
     } finally {
-      setBusy(null);
+      setBusy(false);
     }
   }
+
+  return (
+    <View style={[styles.card, { borderColor: theme.border }]}>
+      <Pressable onPress={() => lessons.length > 0 && setOpen(!open)} style={styles.topRow}>
+        <View style={[styles.dot, { backgroundColor: topic.color }]} />
+        <ThemedText style={[styles.bold, styles.flex]}>{topic.name}</ThemedText>
+        {lessons.length > 0 && (
+          <ThemedText type="small" themeColor="textSecondary">
+            {done.length}/{lessons.length} {open ? '▾' : '▸'}
+          </ThemedText>
+        )}
+      </Pressable>
+
+      {lessons.length === 0 ? (
+        hasKey ? (
+          <>
+            <Button
+              label={busy ? `Gemini is planning the course … ${seconds} s` : 'Plan the course now'}
+              variant="primary"
+              disabled={busy}
+              onPress={plan}
+            />
+            {busy && (
+              <ThemedText type="small" themeColor="textSecondary">
+                This takes up to half a minute. You can stay here.
+              </ThemedText>
+            )}
+          </>
+        ) : (
+          <ThemedText type="small" themeColor="textSecondary">
+            Courses are written by Gemini. Add the free key in Settings.
+          </ThemedText>
+        )
+      ) : (
+        <>
+          {justPlanned && (
+            <ThemedText type="small" style={{ color: theme.success }}>
+              Course planned: {lessons.length} lessons. The first one is part of your next session.
+            </ThemedText>
+          )}
+          {next ? (
+            <ThemedText type="small" themeColor="textSecondary">
+              Next: {next.title}
+            </ThemedText>
+          ) : (
+            <ThemedText type="small">Course finished.</ThemedText>
+          )}
+          {justPlanned && <Button label="Start the first lesson now" onPress={() => router.push('/learn')} />}
+          {open &&
+            lessons.map((l) =>
+              l.status === 'done' ? (
+                <Pressable
+                  key={l.id}
+                  onPress={() => router.push({ pathname: '/lesson/[id]', params: { id: String(l.id) } })}
+                  hitSlop={4}>
+                  <ThemedText type="small" style={{ color: theme.accent }}>
+                    ✓ {l.position}. {l.title}
+                  </ThemedText>
+                </Pressable>
+              ) : (
+                <ThemedText key={l.id} type="small" themeColor="textSecondary">
+                  {l.position}. {l.title}
+                </ThemedText>
+              )
+            )}
+          {open && done.length === 0 && (
+            <Pressable onPress={() => deleteSyllabus(db, topic.id)} hitSlop={4}>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.underline}>
+                Plan this course again
+              </ThemedText>
+            </Pressable>
+          )}
+        </>
+      )}
+      {status ? <ThemedText type="small" style={{ color: '#D93F3F' }}>{status}</ThemedText> : null}
+    </View>
+  );
+}
+
+export function CardsView({ topics }: { topics: Topic[] }) {
+  const theme = useTheme();
+  const data = useQuery(load);
+  const [showAll, setShowAll] = useState(false);
+  if (!data) return null;
+  const { counts, suggested, active, lessons, hasKey } = data;
 
   return (
     <View style={styles.box}>
@@ -108,65 +206,9 @@ export function CardsView({ topics }: { topics: Topic[] }) {
         Each topic gets a course of short lessons, from the basics to current research. One
         lesson comes in every daily session; topics take turns.
       </ThemedText>
-      {topics.map((t) => {
-        const own = lessons.filter((l) => l.topicId === t.id);
-        const done = own.filter((l) => l.status === 'done');
-        const next = own.find((l) => l.status === 'planned');
-        return (
-          <View key={t.id} style={[styles.card, { borderColor: theme.border }]}>
-            <View style={styles.topRow}>
-              <View style={[styles.dot, { backgroundColor: t.color }]} />
-              <ThemedText style={[styles.bold, styles.flex]}>{t.name}</ThemedText>
-              {own.length > 0 && (
-                <ThemedText type="small" themeColor="textSecondary">
-                  {done.length}/{own.length}
-                </ThemedText>
-              )}
-            </View>
-            {own.length === 0 ? (
-              hasKey ? (
-                <Button
-                  label={busy === t.id ? 'Planning the course …' : 'Plan the course now'}
-                  disabled={busy !== null}
-                  onPress={() => createCourse(t)}
-                />
-              ) : (
-                <ThemedText type="small" themeColor="textSecondary">
-                  Courses are written by Gemini. Add the free key in Settings.
-                </ThemedText>
-              )
-            ) : (
-              <>
-                {next ? (
-                  <ThemedText type="small" themeColor="textSecondary">
-                    Next: {next.title}
-                  </ThemedText>
-                ) : (
-                  <ThemedText type="small">Course finished.</ThemedText>
-                )}
-                {done.map((l) => (
-                  <Pressable
-                    key={l.id}
-                    onPress={() => router.push({ pathname: '/lesson/[id]', params: { id: String(l.id) } })}
-                    hitSlop={4}>
-                    <ThemedText type="small" style={{ color: theme.accent }}>
-                      ✓ {l.title}
-                    </ThemedText>
-                  </Pressable>
-                ))}
-                {done.length === 0 && (
-                  <Pressable onPress={() => deleteSyllabus(db, t.id)} hitSlop={4}>
-                    <ThemedText type="small" themeColor="textSecondary" style={styles.underline}>
-                      Plan this course again
-                    </ThemedText>
-                  </Pressable>
-                )}
-              </>
-            )}
-          </View>
-        );
-      })}
-      {status ? <ThemedText type="small">{status}</ThemedText> : null}
+      {topics.map((t) => (
+        <CourseCard key={t.id} topic={t} lessons={lessons.filter((l) => l.topicId === t.id)} hasKey={hasKey} />
+      ))}
 
       <Pressable onPress={() => setShowAll(!showAll)} hitSlop={8}>
         <ThemedText type="smallBold" themeColor="textSecondary">
