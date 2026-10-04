@@ -10,6 +10,14 @@ Write in English, plainly, in short sentences.`;
 
 const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
 
+// The learner's own aim for a topic (for example a thesis), so explanations can point
+// to where an idea will matter for them.
+function goalLine(goal?: string) {
+  return goal?.trim()
+    ? `\nThe learner is preparing for this: ${goal.trim()}\nWhere it fits naturally, connect the content to that aim.`
+    : '';
+}
+
 // ---- Syllabus ---------------------------------------------------------------
 
 export type SyllabusItem = { title: string; outline: string };
@@ -33,8 +41,8 @@ export function parseSyllabus(text: string): SyllabusItem[] {
   return items;
 }
 
-export function makeSyllabus(g: Gemini, topic: { name: string; keywords: string }, count = 20) {
-  const instruction = `${AUDIENCE}
+export function makeSyllabus(g: Gemini, topic: { name: string; keywords: string; goal?: string }, count = 20) {
+  const instruction = `${AUDIENCE}${goalLine(topic.goal)}
 Plan a course of ${count} short daily lessons (5 minutes each) on the topic below, from the
 fundamentals a newcomer needs up to the ideas behind current research. Each lesson covers
 one concept. Order them so each builds on the earlier ones.
@@ -95,9 +103,10 @@ export function makeLesson(
   g: Gemini,
   topic: string,
   lesson: { title: string; outline: string },
-  earlier: string[]
+  earlier: string[],
+  goal?: string
 ) {
-  const instruction = `${AUDIENCE}
+  const instruction = `${AUDIENCE}${goalLine(goal)}
 Write one lesson of about 250 to 350 words. Explain the idea with intuition first, then
 the essentials (a formula only if it really helps, explained in words). Give a concrete
 example from the topic. Assume the learner has done the earlier lessons listed.
@@ -134,8 +143,8 @@ const CARD_RULES = `Good flashcards ask one thing, have a short answer (one sent
 and test understanding or key facts worth remembering a year from now, not trivia.
 Answer only with JSON: { "cards": [ { "front": "question", "back": "answer" } ] }`;
 
-export function cardsFromPaper(g: Gemini, paper: { title: string; text: string }) {
-  const instruction = `${AUDIENCE}
+export function cardsFromPaper(g: Gemini, paper: { title: string; text: string }, goal?: string) {
+  const instruction = `${AUDIENCE}${goalLine(goal)}
 Write 3 to 5 flashcards about the paper below: its key idea, method and main result, and
 any concept from it worth knowing in general.
 ${CARD_RULES}`;

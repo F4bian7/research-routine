@@ -35,7 +35,7 @@ test('vault links notes, papers, people and topics', () => {
     ],
     papers: [paper],
     people: [{ id: 3, ...newPerson({ name: 'Olaf Ronneberger', topicIds: [1] }) }],
-    topics: [{ id: 1, name: 'Medical image segmentation', color: '', keywords: 'x' }],
+    topics: [{ id: 1, name: 'Medical image segmentation', color: '', keywords: 'x', goal: '' }],
     summaries: new Map(),
   });
   const byPath = new Map(files.map((f) => [f.path, f.content]));

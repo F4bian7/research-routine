@@ -25,6 +25,7 @@ It ships as an installable web app (PWA) on GitHub Pages:
 | Follow in two taps, suggestions from the backlog, people timeline in the feed | done |
 | Brain tab: notes (second brain) with [[links]], highlights from the reader, Obsidian export | done |
 | Learn: daily session with a lesson from a per-topic course and spaced-repetition cards; the streak follows it | done |
+| Topic goals, focus topic, study packs (`public/packs/`), OpenAlex key and daily cache | done |
 | Settings: routine, weekend rule, reminder (calendar or Shortcuts), quick links, JSON backup | done |
 
 ## Install on the iPhone

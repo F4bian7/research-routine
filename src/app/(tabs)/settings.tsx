@@ -6,6 +6,7 @@ import {
   BackupSection,
   BlueskySection,
   GeminiSection,
+  OpenAlexSection,
   QuickLinksSection,
   ReminderSection,
   RoutineSection,
@@ -41,6 +42,7 @@ export default function SettingsScreen() {
             <QuickLinksSection settings={settings} />
             <GeminiSection settings={settings} />
             <BlueskySection settings={settings} />
+            <OpenAlexSection settings={settings} />
           </View>
           <BackupSection onImported={() => setGeneration((g) => g + 1)} />
         </ScrollView>

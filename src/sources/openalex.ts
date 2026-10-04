@@ -1,6 +1,7 @@
 import type { AuthorProfile } from '@/db/types';
 import type { FeedPaper } from './feed-types';
 import type { PaperRef } from './links';
+import { OpenAlexError, oaGet } from './openalex-client';
 
 // Metadata and abstract from OpenAlex (free, no key, CORS enabled).
 // No mailto parameter on purpose: it would put an email address into the URL.
@@ -44,9 +45,13 @@ export function formatAuthors(names: string[]): string {
 export async function fetchOpenAlex(ref: PaperRef): Promise<PaperMeta | null> {
   const doi = ref.kind === 'arxiv' ? `10.48550/arXiv.${ref.id}` : ref.kind === 'doi' ? ref.doi : null;
   if (!doi) return null;
-  const res = await fetch(`https://api.openalex.org/works/doi:${encodeURI(doi)}`);
-  if (!res.ok) return null;
-  const w = (await res.json()) as Work;
+  let w: Work;
+  try {
+    w = await oaGet<Work>(`https://api.openalex.org/works/doi:${encodeURI(doi)}`, { cacheDay: true });
+  } catch (e) {
+    if (e instanceof OpenAlexError && e.status === 404) return null;
+    throw e;
+  }
   return {
     title: w.title ?? '',
     authors: formatAuthors((w.authorships ?? []).map((a) => a.author.display_name)),
@@ -88,7 +93,8 @@ export async function searchRecent(
   query: string,
   kind: 'arxiv' | 'pubmed',
   fromDate: string,
-  topicId: number | null
+  topicId: number | null,
+  fresh = false
 ): Promise<FeedPaper[]> {
   const filter = [
     `from_publication_date:${fromDate}`,
@@ -98,9 +104,7 @@ export async function searchRecent(
   const url =
     `https://api.openalex.org/works?filter=${filter}` +
     `&sort=publication_date:desc&per_page=25&select=${SELECT}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`OpenAlex ${res.status}`);
-  const data = (await res.json()) as { results?: Work[] };
+  const data = await oaGet<{ results?: Work[] }>(url, { cacheDay: true, fresh });
   return (data.results ?? []).map((w) => workToFeedPaper(w, topicId)).filter((p) => p.title);
 }
 
@@ -120,9 +124,7 @@ export async function searchAuthors(name: string): Promise<AuthorCandidate[]> {
   const url =
     `https://api.openalex.org/authors?search=${encodeURIComponent(name)}&per_page=6` +
     '&select=id,display_name,last_known_institutions,works_count,cited_by_count,topics,orcid';
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`OpenAlex ${res.status}`);
-  const data = (await res.json()) as { results?: AuthorRow[] };
+  const data = await oaGet<{ results?: AuthorRow[] }>(url, { cacheDay: true });
   // Most prolific first: the real profile usually has far more works than its split-off duplicates.
   return (data.results ?? [])
     .map((a) => ({
@@ -142,30 +144,26 @@ export async function authorWorks(authorId: string): Promise<FeedPaper[]> {
   const url =
     `https://api.openalex.org/works?filter=author.id:${encodeURIComponent(authorId)}` +
     `&sort=publication_date:desc&per_page=20&select=${SELECT}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`OpenAlex ${res.status}`);
-  const data = (await res.json()) as { results?: Work[] };
+  const data = await oaGet<{ results?: Work[] }>(url, { cacheDay: true });
   return (data.results ?? []).map((w) => workToFeedPaper(w, null)).filter((p) => p.title);
 }
 
 // Newest works of several authors at once (OpenAlex allows up to 50 values per filter).
-export async function worksByAuthors(authorIds: string[], perPage = 50): Promise<FeedPaper[]> {
-  return worksBy('author.id', authorIds, perPage);
+export async function worksByAuthors(authorIds: string[], perPage = 50, fresh = false): Promise<FeedPaper[]> {
+  return worksBy('author.id', authorIds, perPage, fresh);
 }
 
 // By ORCID: also finds papers OpenAlex filed under a profile the user does not know yet.
-export async function worksByOrcids(orcids: string[], perPage = 50): Promise<FeedPaper[]> {
-  return worksBy('author.orcid', orcids, perPage);
+export async function worksByOrcids(orcids: string[], perPage = 50, fresh = false): Promise<FeedPaper[]> {
+  return worksBy('author.orcid', orcids, perPage, fresh);
 }
 
-async function worksBy(field: string, values: string[], perPage: number): Promise<FeedPaper[]> {
+async function worksBy(field: string, values: string[], perPage: number, fresh = false): Promise<FeedPaper[]> {
   if (values.length === 0) return [];
   const url =
     `https://api.openalex.org/works?filter=${field}:${values.slice(0, 50).map(encodeURIComponent).join('|')}` +
     `&sort=publication_date:desc&per_page=${perPage}&select=${SELECT}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`OpenAlex ${res.status}`);
-  const data = (await res.json()) as { results?: Work[] };
+  const data = await oaGet<{ results?: Work[] }>(url, { cacheDay: true, fresh });
   return (data.results ?? []).map((w) => workToFeedPaper(w, null)).filter((p) => p.title);
 }
 
@@ -177,9 +175,7 @@ export async function authorsOfDois(dois: string[]): Promise<CoAuthor[]> {
   const url =
     `https://api.openalex.org/works?filter=doi:${dois.slice(0, 50).map(encodeURIComponent).join('|')}` +
     '&per_page=50&select=doi,authorships';
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`OpenAlex ${res.status}`);
-  const data = (await res.json()) as { results?: Work[] };
+  const data = await oaGet<{ results?: Work[] }>(url, { cacheDay: true });
   const byId = new Map<string, CoAuthor>();
   for (const w of data.results ?? []) {
     for (const a of w.authorships ?? []) {
@@ -202,9 +198,10 @@ export async function authorsOfDois(dois: string[]): Promise<CoAuthor[]> {
 export async function fetchWorkAuthors(ref: PaperRef): Promise<{ ids: string[]; orcids: string[] }> {
   const doi = ref.kind === 'arxiv' ? `10.48550/arXiv.${ref.id}` : ref.kind === 'doi' ? ref.doi : null;
   if (!doi) return { ids: [], orcids: [] };
-  const res = await fetch(`https://api.openalex.org/works/doi:${encodeURI(doi)}?select=authorships`);
-  if (!res.ok) return { ids: [], orcids: [] };
-  const w = (await res.json()) as Work;
+  const w = await oaGet<Work>(`https://api.openalex.org/works/doi:${encodeURI(doi)}?select=authorships`, {
+    cacheDay: true,
+  }).catch(() => null);
+  if (!w) return { ids: [], orcids: [] };
   return {
     ids: (w.authorships ?? []).map((a) => shortId(a.author.id ?? '')).filter(Boolean),
     orcids: (w.authorships ?? []).map((a) => a.author.orcid ?? '').filter(Boolean),

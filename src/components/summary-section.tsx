@@ -11,6 +11,7 @@ import { useQuery } from '@/data/use-query';
 import { type Db, useDb } from '@/db/db';
 import { getSettings } from '@/db/repos/settings';
 import { getSummary, saveSummary } from '@/db/repos/summaries';
+import { listTopics } from '@/db/repos/topics';
 import type { Paper } from '@/db/types';
 import { claudeUrl } from '@/sources/claude';
 import { getGemini } from '@/data/learn';
@@ -38,14 +39,18 @@ export function SummarySection({
 }) {
   const db = useDb();
   const load = useCallback(
-    async (d: Db) => ({ settings: await getSettings(d), summary: await getSummary(d, paper.id) }),
-    [paper.id]
+    async (d: Db) => ({
+      settings: await getSettings(d),
+      summary: await getSummary(d, paper.id),
+      goal: (await listTopics(d)).find((t) => t.id === paper.topicId)?.goal ?? '',
+    }),
+    [paper.id, paper.topicId]
   );
   const data = useQuery(load);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   if (!data) return null;
-  const { settings, summary } = data;
+  const { settings, summary, goal } = data;
 
   async function run() {
     const g = await getGemini(db);
@@ -54,7 +59,11 @@ export function SummarySection({
     setError('');
     try {
       let model = g.model;
-      const s = await summarize({ ...g, onModel: (m) => ((model = m), g.onModel?.(m)) }, { title: paper.title, text });
+      const s = await summarize(
+        { ...g, onModel: (m) => ((model = m), g.onModel?.(m)) },
+        { title: paper.title, text },
+        goal
+      );
       await saveSummary(db, paper.id, s, model);
     } catch (e) {
       setError(explainError(e));
@@ -111,7 +120,8 @@ export function SummarySection({
         />
       )}
       {error ? <ThemedText style={styles.error}>{error}</ThemedText> : null}
-      <Button label="Ask Claude ↗" onPress={() => openUrl(claudeUrl(paper, abstract))} />
+      {/* Opened synchronously: iOS blocks windows opened after an await. */}
+      <Button label="Ask Claude ↗" onPress={() => openUrl(claudeUrl(paper, abstract, goal))} />
     </ThemedView>
   );
 }

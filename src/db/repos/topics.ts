@@ -3,15 +3,16 @@ import type { Db } from '@/db/db';
 import type { Topic } from '../types';
 
 export async function listTopics(db: Db): Promise<Topic[]> {
-  return db.getAllAsync<Topic>('SELECT id, name, color, keywords FROM topics ORDER BY name');
+  return db.getAllAsync<Topic>('SELECT id, name, color, keywords, goal FROM topics ORDER BY name');
 }
 
-export async function addTopic(db: Db, t: Omit<Topic, 'id'>): Promise<number> {
+export async function addTopic(db: Db, t: Omit<Topic, 'id' | 'goal'> & { goal?: string }): Promise<number> {
   const r = await db.runAsync(
-    'INSERT INTO topics (name, color, keywords) VALUES (?, ?, ?)',
+    'INSERT INTO topics (name, color, keywords, goal) VALUES (?, ?, ?, ?)',
     t.name,
     t.color,
-    t.keywords
+    t.keywords,
+    t.goal ?? ''
   );
   notifyChange();
   return r.lastInsertRowId;
@@ -19,10 +20,11 @@ export async function addTopic(db: Db, t: Omit<Topic, 'id'>): Promise<number> {
 
 export async function updateTopic(db: Db, t: Topic) {
   await db.runAsync(
-    'UPDATE topics SET name = ?, color = ?, keywords = ? WHERE id = ?',
+    'UPDATE topics SET name = ?, color = ?, keywords = ?, goal = ? WHERE id = ?',
     t.name,
     t.color,
     t.keywords,
+    t.goal,
     t.id
   );
   notifyChange();

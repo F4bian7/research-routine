@@ -1,10 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CardsView } from '@/components/brain-cards';
 import { NotesView } from '@/components/brain-notes';
+import { StudyPacks } from '@/components/study-packs';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button, Chip, Field, Row } from '@/components/ui';
@@ -13,19 +14,21 @@ import { useQuery } from '@/data/use-query';
 import { type Db, useDb } from '@/db/db';
 import { type Suggestion, suggestPeople } from '@/data/people';
 import { listPeople } from '@/db/repos/people';
+import { getSettings, setSetting } from '@/db/repos/settings';
 import { addTopic, deleteTopic, listTopics, updateTopic } from '@/db/repos/topics';
 import type { Person, Topic } from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#64748B'];
 
-function TopicEditor({ topic }: { topic: Topic }) {
+function TopicEditor({ topic, focused }: { topic: Topic; focused: boolean }) {
   const db = useDb();
   const theme = useTheme();
   const [name, setName] = useState(topic.name);
   const [keywords, setKeywords] = useState(topic.keywords);
+  const [goal, setGoal] = useState(topic.goal);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const save = (patch: Partial<Topic>) => updateTopic(db, { ...topic, name, keywords, ...patch });
+  const save = (patch: Partial<Topic>) => updateTopic(db, { ...topic, name, keywords, goal, ...patch });
 
   return (
     <ThemedView type="backgroundElement" style={styles.section}>
@@ -38,6 +41,18 @@ function TopicEditor({ topic }: { topic: Topic }) {
         multiline
         autoCapitalize="none"
       />
+      <Field
+        label="Goal (optional): what you need this topic for"
+        value={goal}
+        onChangeText={setGoal}
+        onBlur={() => save({})}
+        multiline
+        placeholder="e.g. my MSc thesis on …; lessons, cards and summaries then point to it"
+      />
+      <View style={styles.toggle}>
+        <ThemedText style={styles.flex}>Daily lessons only from this topic</ThemedText>
+        <Switch value={focused} onValueChange={(on) => setSetting(db, 'focusTopicId', on ? topic.id : null)} />
+      </View>
       <Row>
         {COLORS.map((c) => (
           <Pressable
@@ -133,8 +148,8 @@ function Suggestions({ followedCount }: { followedCount: number }) {
 }
 
 async function load(db: Db) {
-  const [topics, people] = await Promise.all([listTopics(db), listPeople(db)]);
-  return { topics, people };
+  const [topics, people, settings] = await Promise.all([listTopics(db), listPeople(db), getSettings(db)]);
+  return { topics, people, settings };
 }
 
 type BrainView = 'notes' | 'cards' | 'topics' | 'people';
@@ -155,7 +170,7 @@ export default function BrainScreen() {
   const setView = (v: BrainView) => router.setParams({ view: v });
   const [topicFilter, setTopicFilter] = useState<number | null>(null);
   if (!data) return <ThemedView style={styles.container} />;
-  const { topics, people } = data;
+  const { topics, people, settings } = data;
   const shown = people.filter((p) => topicFilter === null || p.topicIds.includes(topicFilter));
 
   return (
@@ -203,8 +218,9 @@ export default function BrainScreen() {
                 &quot;EEG seizure&quot; finds papers with both words; put a phrase in quotes to match it
                 exactly.
               </ThemedText>
+              <StudyPacks added={settings.packs} />
               {topics.map((t) => (
-                <TopicEditor key={t.id} topic={t} />
+                <TopicEditor key={t.id} topic={t} focused={settings.focusTopicId === t.id} />
               ))}
             </>
           ) : (
@@ -268,6 +284,7 @@ const styles = StyleSheet.create({
   section: { borderRadius: Spacing.three, padding: Spacing.three, gap: Spacing.three },
   color: { width: 32, height: 32, borderRadius: 16, borderWidth: 3 },
   noWrap: { flexWrap: 'nowrap' },
+  toggle: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, minHeight: 44 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

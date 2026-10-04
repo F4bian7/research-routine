@@ -14,6 +14,9 @@ export const DEFAULT_SETTINGS: Settings = {
   // Alias that follows the newest Flash release, so the app does not pin a retired model.
   geminiModel: 'gemini-flash-latest',
   blueskySource: '',
+  openalexKey: null,
+  focusTopicId: null,
+  packs: [],
 };
 
 export const DEFAULT_ROUTINE: DayTask[] = [

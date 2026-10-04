@@ -57,14 +57,14 @@ export function loadNewPapers(topics: Topic[], refresh = false): Promise<FeedPap
         parseKeywords(t.keywords).flatMap((k) => {
           const q = keywordQuery([k]);
           return [
-            () => searchRecent(q, 'arxiv', from, t.id),
-            () => searchRecent(q, 'pubmed', from, t.id),
+            () => searchRecent(q, 'arxiv', from, t.id, refresh),
+            () => searchRecent(q, 'pubmed', from, t.id, refresh),
           ];
         })
       );
       const results = await pool(jobs, 4);
       if (jobs.length && results.every((r) => r.status === 'rejected')) {
-        throw new Error('All searches failed');
+        throw (results[0] as PromiseRejectedResult).reason;
       }
       const seen = new Map<string, FeedPaper>();
       for (const r of results) {

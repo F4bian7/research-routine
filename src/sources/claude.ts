@@ -6,7 +6,7 @@ import { canonicalUrl, parsePaperLink } from './links';
 // characters, so the prompt carries the abstract and links, not the full text.
 const MAX_PROMPT = 12_000;
 
-export function claudePrompt(paper: Paper, abstract: string): string {
+export function claudePrompt(paper: Paper, abstract: string, goal?: string): string {
   const ref = parsePaperLink(paper.url);
   const lines = [
     'I am reading this paper and want to ask you questions about it.',
@@ -18,6 +18,7 @@ export function claudePrompt(paper: Paper, abstract: string): string {
   if (paper.url) lines.push(`Link: ${canonicalUrl(ref)}`);
   if (ref.kind === 'arxiv') lines.push(`Full text (HTML): https://arxiv.org/html/${ref.id}`);
   if (abstract) lines.push('', 'Abstract:', abstract);
+  if (goal?.trim()) lines.push('', `Why I read it: I am preparing for this: ${goal.trim()}`);
   lines.push(
     '',
     'Please read the full text from the link first if you can. Then give me a short overview ' +
@@ -26,6 +27,6 @@ export function claudePrompt(paper: Paper, abstract: string): string {
   return lines.join('\n').slice(0, MAX_PROMPT);
 }
 
-export function claudeUrl(paper: Paper, abstract: string): string {
-  return `https://claude.ai/new?q=${encodeURIComponent(claudePrompt(paper, abstract))}`;
+export function claudeUrl(paper: Paper, abstract: string, goal?: string): string {
+  return `https://claude.ai/new?q=${encodeURIComponent(claudePrompt(paper, abstract, goal))}`;
 }

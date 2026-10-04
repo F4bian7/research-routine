@@ -11,6 +11,7 @@ import { useQuery } from '@/data/use-query';
 import { type Db, useDb } from '@/db/db';
 import { addCards, cardsFor, deleteCard, updateCard } from '@/db/repos/cards';
 import { notesForPaper } from '@/db/repos/notes';
+import { listTopics } from '@/db/repos/topics';
 import type { Paper } from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
 import { explainError } from '@/sources/gemini';
@@ -65,7 +66,8 @@ export function PaperCards({ paper, text }: { paper: Paper; text: string }) {
     setBusy(true);
     setStatus('');
     try {
-      const drafts = await cardsFromPaper(g, { title: paper.title, text });
+      const goal = (await listTopics(db)).find((t) => t.id === paper.topicId)?.goal;
+      const drafts = await cardsFromPaper(g, { title: paper.title, text }, goal);
       await addCards(
         db,
         drafts.map((c) => ({

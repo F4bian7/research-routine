@@ -27,7 +27,7 @@ async function load(db: Db) {
     listLessons(db),
     getSettings(db),
   ]);
-  return { counts, suggested, active, lessons, hasKey: !!settings.geminiApiKey };
+  return { counts, suggested, active, lessons, hasKey: !!settings.geminiApiKey, focusId: settings.focusTopicId };
 }
 
 function SuggestedCard({ card }: { card: Card }) {
@@ -169,7 +169,8 @@ export function CardsView({ topics }: { topics: Topic[] }) {
   const data = useQuery(load);
   const [showAll, setShowAll] = useState(false);
   if (!data) return null;
-  const { counts, suggested, active, lessons, hasKey } = data;
+  const { counts, suggested, active, lessons, hasKey, focusId } = data;
+  const focus = topics.find((t) => t.id === focusId);
 
   return (
     <View style={styles.box}>
@@ -204,7 +205,10 @@ export function CardsView({ topics }: { topics: Topic[] }) {
       <ThemedText type="smallBold">Courses</ThemedText>
       <ThemedText type="small" themeColor="textSecondary">
         Each topic gets a course of short lessons, from the basics to current research. One
-        lesson comes in every daily session; topics take turns.
+        lesson comes in every daily session;{' '}
+        {focus
+          ? `right now all of them come from "${focus.name}" (switch the focus in Topics).`
+          : 'topics take turns.'}
       </ThemedText>
       {topics.map((t) => (
         <CourseCard key={t.id} topic={t} lessons={lessons.filter((l) => l.topicId === t.id)} hasKey={hasKey} />

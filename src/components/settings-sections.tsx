@@ -342,6 +342,33 @@ export function BlueskySection({ settings }: { settings: Settings }) {
   );
 }
 
+export function OpenAlexSection({ settings }: { settings: Settings }) {
+  const db = useDb();
+  const [key, setKey] = useState(settings.openalexKey ?? '');
+  return (
+    <Section title="OpenAlex (paper search)">
+      <Hint>
+        New papers, people and abstracts come from OpenAlex. Without a key every network gets
+        a small free budget per day (about 100 searches), which the feeds can use up. A free
+        OpenAlex account gives you a key with ten times more. The key stays on this device.
+      </Hint>
+      <Button
+        label="How to get a free key ↗"
+        onPress={() => openUrl('https://help.openalex.org/api/authentication/')}
+      />
+      <Field
+        label="OpenAlex API key (optional)"
+        value={key}
+        onChangeText={setKey}
+        onBlur={() => setSetting(db, 'openalexKey', key.trim() || null)}
+        secureTextEntry
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+    </Section>
+  );
+}
+
 // ---- Backup ----------------------------------------------------------------
 
 export function BackupSection({ onImported }: { onImported: () => void }) {

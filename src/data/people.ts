@@ -26,12 +26,12 @@ import {
 // ---- Papers of a person ----------------------------------------------------------
 
 // Everything known for a person: all linked profiles plus their ORCID, merged.
-export async function worksForPeople(people: Person[], perPage = 50): Promise<FeedPaper[]> {
+export async function worksForPeople(people: Person[], perPage = 50, fresh = false): Promise<FeedPaper[]> {
   const ids = [...new Set(people.flatMap((p) => p.openalexIds))];
   const orcids = [...new Set(people.map((p) => p.orcid).filter((o): o is string => !!o))];
   const [byId, byOrcid] = await Promise.all([
-    worksByAuthors(ids, perPage),
-    worksByOrcids(orcids, perPage).catch(() => [] as FeedPaper[]),
+    worksByAuthors(ids, perPage, fresh),
+    worksByOrcids(orcids, perPage, fresh).catch(() => [] as FeedPaper[]),
   ]);
   const seen = new Map<string, FeedPaper>();
   for (const p of [...byId, ...byOrcid]) {
@@ -223,7 +223,7 @@ export function blueskyActor(p: Person) {
 export function loadTimeline(people: Person[], refresh = false): Promise<Timeline> {
   const key = peopleKey(people);
   if (!refresh && cache?.key === key) return cache.value;
-  const value = buildTimeline(people);
+  const value = buildTimeline(people, refresh);
   cache = { key, value };
   value.catch(() => {
     if (cache?.value === value) cache = null;
@@ -231,14 +231,14 @@ export function loadTimeline(people: Person[], refresh = false): Promise<Timelin
   return value;
 }
 
-async function buildTimeline(people: Person[]): Promise<Timeline> {
+async function buildTimeline(people: Person[], fresh: boolean): Promise<Timeline> {
   const today = todayKey();
   const withBsky = people
     .map((p) => ({ p, actor: blueskyActor(p) }))
     .filter((x): x is { p: Person; actor: string } => !!x.actor);
 
   const [papers, postLists, profiles] = await Promise.all([
-    worksForPeople(people).catch(() => [] as FeedPaper[]),
+    worksForPeople(people, 50, fresh).catch(() => [] as FeedPaper[]),
     Promise.all(
       withBsky.map(({ p, actor }) =>
         followedPosts(actor)

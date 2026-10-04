@@ -14,8 +14,8 @@ test('Bluesky name check', () => {
 
 test('topics from paper titles', () => {
   const topics = [
-    { id: 1, name: 'Seg', color: '', keywords: 'medical image segmentation, nnU-Net' },
-    { id: 2, name: 'EEG', color: '', keywords: 'EEG seizure, "seizure detection"' },
+    { id: 1, name: 'Seg', color: '', keywords: 'medical image segmentation, nnU-Net', goal: '' },
+    { id: 2, name: 'EEG', color: '', keywords: 'EEG seizure, "seizure detection"', goal: '' },
   ];
   const texts = [
     'nnU-Net revisited',

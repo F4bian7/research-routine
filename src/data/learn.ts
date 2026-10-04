@@ -34,7 +34,12 @@ export async function getGemini(db: Db): Promise<Gemini | null> {
 
 // The topic whose course has moved least recently, so topics take turns. Without
 // Gemini only lessons that are already written can be served.
-function nextTopic(topics: Topic[], lessons: Lesson[], canWrite: boolean): Topic | null {
+function nextTopic(
+  topics: Topic[],
+  lessons: Lesson[],
+  canWrite: boolean,
+  focusId: number | null
+): Topic | null {
   const lastDone = (t: Topic) =>
     lessons
       .filter((l) => l.topicId === t.id && l.doneAt)
@@ -47,6 +52,9 @@ function nextTopic(topics: Topic[], lessons: Lesson[], canWrite: boolean): Topic
     if (canWrite) return !!next || !lessons.some((l) => l.topicId === t.id);
     return !!next?.content;
   });
+  // A focused topic (for example a thesis) gets every lesson until its course is done.
+  const focused = open.find((t) => t.id === focusId);
+  if (focused) return focused;
   return [...open].sort((a, b) => lastDone(a).localeCompare(lastDone(b)))[0] ?? null;
 }
 
@@ -55,8 +63,8 @@ export async function peekLesson(
   db: Db,
   canWrite = true
 ): Promise<{ lesson: Lesson | null; topic: Topic | null }> {
-  const [topics, lessons] = await Promise.all([listTopics(db), listLessons(db)]);
-  const topic = nextTopic(topics, lessons, canWrite);
+  const [topics, lessons, settings] = await Promise.all([listTopics(db), listLessons(db), getSettings(db)]);
+  const topic = nextTopic(topics, lessons, canWrite, settings.focusTopicId);
   const lesson = topic
     ? (lessons.find((l) => l.topicId === topic.id && l.status === 'planned') ?? null)
     : null;
@@ -80,7 +88,7 @@ export async function prepareLesson(db: Db): Promise<{ lesson: Lesson; topic: To
     const earlier = (await listLessons(db, topic.id))
       .filter((l) => l.position < lesson!.position)
       .map((l) => l.title);
-    await saveLessonContent(db, lesson.id, await makeLesson(gemini, topic.name, lesson, earlier));
+    await saveLessonContent(db, lesson.id, await makeLesson(gemini, topic.name, lesson, earlier, topic.goal));
     lesson = (await getLesson(db, lesson.id))!;
   }
   return { lesson, topic };

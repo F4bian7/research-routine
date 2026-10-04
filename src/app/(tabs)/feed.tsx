@@ -15,6 +15,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Button, Chip, Row } from '@/components/ui';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { loadBluesky, loadNewPapers, loadTrending, NEW_PAPERS_DAYS } from '@/data/feeds';
+import { openAlexHint } from '@/sources/openalex-client';
 import { checkDuePeople, loadTimeline, peopleKey, type Timeline } from '@/data/people';
 import { useQuery } from '@/data/use-query';
 import { type Db, useDb } from '@/db/db';
@@ -28,6 +29,10 @@ export type FeedTab = 'people' | 'new' | 'trending' | 'bluesky';
 
 type Load<T> = { state: 'loading' } | { state: 'error' } | { state: 'done'; items: T[] };
 
+function failureText(e: unknown) {
+  return openAlexHint(e) ?? 'Could not load the feed. Are you online?';
+}
+
 async function loadContext(db: Db) {
   const [topics, settings, decisions, people] = await Promise.all([
     listTopics(db),
@@ -40,7 +45,7 @@ async function loadContext(db: Db) {
 
 type Result =
   | { key: string; ok: true; papers: FeedPaper[]; posts: BlueskyPost[]; timeline?: Timeline }
-  | { key: string; ok: false };
+  | { key: string; ok: false; message: string };
 
 function fetchFeed(
   tab: FeedTab,
@@ -92,7 +97,7 @@ export default function FeedScreen() {
     let alive = true;
     fetchFeed(tab, ctx, false)
       .then((r) => alive && setResult({ key, ok: true, ...r }))
-      .catch(() => alive && setResult({ key, ok: false }));
+      .catch((e: unknown) => alive && setResult({ key, ok: false, message: failureText(e) }));
     return () => {
       alive = false;
     };
@@ -103,7 +108,7 @@ export default function FeedScreen() {
     setRefreshing(true);
     fetchFeed(tab, ctx, true)
       .then((r) => setResult({ key, ok: true, ...r }))
-      .catch(() => setResult({ key, ok: false }))
+      .catch((e: unknown) => setResult({ key, ok: false, message: failureText(e) }))
       .finally(() => setRefreshing(false));
   }
 
@@ -191,7 +196,7 @@ export default function FeedScreen() {
             ) : !current ? (
               <FeedMessage text="Loading …" />
             ) : !current.ok ? (
-              <FeedMessage text="Could not load the people feed. Are you online?" onRetry={refresh} />
+              <FeedMessage text={current.message} onRetry={refresh} />
             ) : !current.timeline || current.timeline.items.length === 0 ? (
               <FeedMessage text="Nothing new from the people you follow." />
             ) : (
@@ -221,7 +226,7 @@ export default function FeedScreen() {
           ) : papers.state === 'loading' ? (
             <FeedMessage text="Loading …" />
           ) : papers.state === 'error' ? (
-            <FeedMessage text="Could not load the feed. Are you online?" onRetry={refresh} />
+            <FeedMessage text={current && !current.ok ? current.message : 'Could not load the feed.'} onRetry={refresh} />
           ) : visiblePapers.length === 0 ? (
             <FeedMessage
               text={

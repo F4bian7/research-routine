@@ -165,6 +165,10 @@ const MIGRATIONS: string[] = [
   );
   INSERT INTO routine_done (date) SELECT date FROM completions;
   `,
+  // A goal per topic (for example a thesis) that lessons, cards and summaries refer to.
+  `
+  ALTER TABLE topics ADD COLUMN goal TEXT NOT NULL DEFAULT '';
+  `,
 ];
 
 export async function migrateAndSeed(db: Db) {

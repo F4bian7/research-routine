@@ -15,6 +15,9 @@ export async function getSettings(db: Db): Promise<Settings> {
     geminiApiKey: stored.geminiApiKey ?? DEFAULT_SETTINGS.geminiApiKey,
     geminiModel: stored.geminiModel || DEFAULT_SETTINGS.geminiModel,
     blueskySource: stored.blueskySource ?? DEFAULT_SETTINGS.blueskySource,
+    openalexKey: stored.openalexKey ?? DEFAULT_SETTINGS.openalexKey,
+    focusTopicId: stored.focusTopicId ?? DEFAULT_SETTINGS.focusTopicId,
+    packs: stored.packs ?? DEFAULT_SETTINGS.packs,
   };
 }
 

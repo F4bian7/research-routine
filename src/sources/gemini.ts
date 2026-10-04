@@ -162,8 +162,15 @@ export async function generateJson<T>(
   }
 }
 
-export async function summarize(g: Gemini, paper: { title: string; text: string }): Promise<Summary> {
-  return generateJson(g, INSTRUCTION, `Title: ${paper.title}\n\n${paper.text}`, parseSummary);
+export async function summarize(
+  g: Gemini,
+  paper: { title: string; text: string },
+  goal?: string
+): Promise<Summary> {
+  const aim = goal?.trim()
+    ? `\n\nThe reader is preparing for this: ${goal.trim()}\nIn "relevance", also say what the paper means for that aim.`
+    : '';
+  return generateJson(g, INSTRUCTION + aim, `Title: ${paper.title}\n\n${paper.text}`, parseSummary);
 }
 
 // A real, tiny request: proves key, model and quota. Returns the model that answered.

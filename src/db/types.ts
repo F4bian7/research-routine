@@ -5,6 +5,7 @@ export type Topic = {
   name: string;
   color: string;
   keywords: string; // comma-separated; words inside one keyword must all match
+  goal: string; // what the user needs the topic for, e.g. an upcoming thesis
 };
 
 export type PersonLinks = {
@@ -93,6 +94,9 @@ export type Settings = {
   geminiModel: string;
   // Bluesky accounts (handles) or one list URL; empty = search posts by topic keywords.
   blueskySource: string;
+  openalexKey: string | null; // optional; raises the daily OpenAlex budget tenfold
+  focusTopicId: number | null; // when set, daily lessons come from this topic only
+  packs: string[]; // ids of study packs already added
 };
 
 export type Summary = {

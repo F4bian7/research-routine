@@ -25,7 +25,7 @@ const TABLES = [
 ] as const;
 type Table = (typeof TABLES)[number];
 
-const SECRET_SETTINGS = ['geminiApiKey'];
+const SECRET_SETTINGS = ['geminiApiKey', 'openalexKey'];
 
 export type Backup = {
   app: typeof BACKUP_APP;

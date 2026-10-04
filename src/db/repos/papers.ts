@@ -88,7 +88,13 @@ export type NewPaper = Pick<Paper, 'title' | 'url' | 'topicId' | 'type'> &
   Partial<Pick<Paper, 'authors' | 'year' | 'note'>>;
 
 // New papers go to the end of the queue.
-export async function addPaper(db: Db, p: NewPaper): Promise<number> {
+// Position before everything queued, for papers that should be read first.
+export async function frontPosition(db: Db) {
+  const row = await db.getFirstAsync<{ p: number | null }>('SELECT MIN(position) AS p FROM papers');
+  return (row?.p ?? 1) - 1;
+}
+
+export async function addPaper(db: Db, p: NewPaper, position?: number): Promise<number> {
   const r = await db.runAsync(
     `INSERT INTO papers (title, authors, year, url, topic_id, type, status, note, added_at, position)
      VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)`,
@@ -100,7 +106,7 @@ export async function addPaper(db: Db, p: NewPaper): Promise<number> {
     p.type,
     p.note ?? '',
     new Date().toISOString(),
-    await nextPosition(db)
+    position ?? (await nextPosition(db))
   );
   notifyChange();
   return r.lastInsertRowId;
