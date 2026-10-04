@@ -45,7 +45,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "tsx --test src/domain/*.test.ts",
+    "test": "tsx --test src/domain/*.test.ts src/sources/*.test.ts",
     "build:web": "node scripts/build-web.mjs"
   },
   "private": true

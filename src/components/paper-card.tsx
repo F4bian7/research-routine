@@ -1,15 +1,32 @@
+import { router } from 'expo-router';
+import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { LinkButton } from '@/components/link-button';
 import { ThemedText } from '@/components/themed-text';
+import { Button } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import type { Paper, Topic } from '@/db/types';
 import { PAPER_TYPE_LABEL } from '@/domain/labels';
 import { useTheme } from '@/hooks/use-theme';
 
-export function PaperCard({ paper, topic }: { paper: Paper; topic?: Topic }) {
+export function paperMeta(paper: Paper) {
+  return [paper.authors, paper.year, PAPER_TYPE_LABEL[paper.type]].filter(Boolean).join(' · ');
+}
+
+export function openReader(paper: Paper) {
+  router.push({ pathname: '/paper/[id]', params: { id: String(paper.id) } });
+}
+
+export function PaperCard({
+  paper,
+  topic,
+  children,
+}: {
+  paper: Paper;
+  topic?: Topic;
+  children?: ReactNode;
+}) {
   const theme = useTheme();
-  const meta = [paper.authors, paper.year, PAPER_TYPE_LABEL[paper.type]].filter(Boolean).join(' · ');
   return (
     <View style={[styles.card, { borderColor: theme.border }]}>
       {topic && (
@@ -24,9 +41,10 @@ export function PaperCard({ paper, topic }: { paper: Paper; topic?: Topic }) {
         {paper.title}
       </ThemedText>
       <ThemedText type="small" themeColor="textSecondary">
-        {meta}
+        {paperMeta(paper)}
       </ThemedText>
-      {paper.url ? <LinkButton label="Öffnen" url={paper.url} /> : null}
+      <Button label="Lesen" variant="primary" onPress={() => openReader(paper)} />
+      {children}
     </View>
   );
 }

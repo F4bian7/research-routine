@@ -1,7 +1,6 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { useColorScheme } from 'react-native';
 
-import AppTabs from '@/components/app-tabs';
 import { DbProvider } from '@/db/db-provider';
 
 export default function RootLayout() {
@@ -9,7 +8,11 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <DbProvider>
-        <AppTabs />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="paper/[id]" />
+          <Stack.Screen name="paper/new" />
+        </Stack>
       </DbProvider>
     </ThemeProvider>
   );

@@ -14,7 +14,10 @@ It ships as an installable web app (PWA) on GitHub Pages:
 | Setup (Expo, TypeScript, navigation, database, seed data) | done |
 | Web app on GitHub Pages, offline, home screen install | done |
 | Tab "Heute" | done |
-| Tab "Backlog" | next |
+| Tab "Backlog" (queue, archive, add with clipboard and auto-fill) | done |
+| In-app reader (abstract, figures, conclusion, full text for arXiv) | done |
+| In-app feeds: new papers (PubMed, arXiv via OpenAlex), Bluesky, HF trending | next |
+| Plain-language summaries (Claude API, own key) | open |
 | Tab "Themen und Personen" | open |
 | Tab "Einstellungen" (routine, reminder, quick links, JSON export/import) | open |
 
@@ -57,6 +60,8 @@ npm run build:web       # production web build into dist/
 - `src/db/` schema and migrations, seed data, one repo per entity (no React), `Db` interface
   with a native (expo-sqlite) and a web (sql.js + IndexedDB) backend
 - `src/domain/` pure logic: local-time date keys, streak rule
+- `src/sources/` paper lookup: link parsing, OpenAlex metadata, arXiv HTML full text
+  (cached with the Cache API, not in SQLite)
 - `src/data/` `useQuery` hook and change notification between repos and screens
 - `public/` sql.js runtime, web manifest, icons
 - `scripts/build-web.mjs` export plus PWA patching and service worker
