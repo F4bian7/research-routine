@@ -22,7 +22,7 @@ It ships as an installable web app (PWA) on GitHub Pages:
 | English UI | done |
 | Topics tab: names, colours, feed keywords | done |
 | People you follow | open |
-| Tab "Einstellungen" (routine, reminder, quick links, JSON export/import) | open |
+| Settings: routine, reminder, quick links, JSON export/import | open |
 
 ## Install on the iPhone
 
